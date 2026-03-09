@@ -12,7 +12,7 @@ MATCH_MESSAGES = {
     ],
     "seed-chat-match-002": [
         (0, "Hey Anna! I noticed you're into hiking. I'm looking for workout partners too."),
-        (1, "Hi Dmitry! Yes, I love hiking on weekends. Do you hike as well?"),
+        (1, "Hi Max! Yes, I love hiking on weekends. Do you hike as well?"),
         (0, "Not much hiking, but I'd love to try! I'm more into gym and boxing."),
         (1, "That's cool! Maybe we can do a hike that includes some fitness challenges?"),
     ],
