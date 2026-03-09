@@ -1,0 +1,15 @@
+query sports {
+  sports {
+    id
+    name
+    iconUrl
+  }
+}
+
+query goals {
+  goals {
+    id
+    name
+    iconUrl
+  }
+}

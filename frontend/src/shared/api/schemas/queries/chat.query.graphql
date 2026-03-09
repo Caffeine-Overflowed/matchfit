@@ -1,0 +1,58 @@
+query myChats($limit: Int! = 50, $offset: Int! = 0) {
+    myChats(limit: $limit, offset: $offset) {
+        id
+        title
+        type
+        imageFileName
+        unreadCount
+        hasUnreadMessages
+        otherUser {
+            id
+            email
+        }
+        lastMessage {
+            id
+            content
+            senderId
+            senderEmail
+            sentAt
+            isRead
+        }
+        participants {
+            userId
+            isHost
+        }
+    }
+}
+
+query chatInfo($chatId: String!) {
+    chatInfo(chatId: $chatId) {
+        id
+        title
+        type
+        imageFileName
+        profile {
+            userId
+            name
+            avatarUrl
+        }
+    }
+}
+
+query chatMessages($input: GetMessagesInput!) {
+    chatMessages(input: $input) {
+        messages {
+            id
+            chatId
+            content
+            sentAt
+            sender {
+                id
+                email
+            }
+        }
+        hasMore
+        nextCursorId
+        nextCursorSentAt
+    }
+}

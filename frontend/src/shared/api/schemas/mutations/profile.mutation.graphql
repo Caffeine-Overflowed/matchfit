@@ -1,0 +1,11 @@
+mutation createProfile($data: ProfileInput!) {
+  createProfile(data: $data) {
+    ...ProfileFragment
+  }
+}
+
+mutation updateProfile($data: ProfileInput!) {
+  updateProfile(data: $data) {
+    ...ProfileFragment
+  }
+}

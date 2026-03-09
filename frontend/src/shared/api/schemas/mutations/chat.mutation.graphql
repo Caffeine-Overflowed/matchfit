@@ -1,0 +1,18 @@
+mutation sendMessage($input: SendMessageInput!) {
+    sendMessage(input: $input) {
+        id
+        chatId
+        content
+        sentAt
+        sender {
+            id
+            email
+        }
+    }
+}
+
+mutation markAsRead($input: MarkAsReadInput!) {
+    markAsRead(input: $input) {
+        success
+    }
+}

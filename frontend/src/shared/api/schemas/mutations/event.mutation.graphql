@@ -1,0 +1,23 @@
+mutation createEvent($eventData: CreateEventInput!) {
+  createEvent(eventData: $eventData) {
+    ...Event
+  }
+}
+
+mutation joinEvent($eventId: String!) {
+  joinEvent(eventId: $eventId) {
+    ...Event
+  }
+}
+
+mutation cancelEvent($eventId: String!) {
+  cancelEvent(eventId: $eventId) {
+    ...Event
+  }
+}
+
+mutation updateEvent($eventData: UpdateEventInput!) {
+  updateEvent(eventData: $eventData) {
+    ...Event
+  }
+}

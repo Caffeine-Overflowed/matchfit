@@ -1,0 +1,3 @@
+mutation swipe($targetId: String!, $isLiked: Boolean!) {
+    swipe(targetId: $targetId, isLiked: $isLiked)
+}

@@ -1,0 +1,58 @@
+fragment Event on EventType {
+    id
+    title
+    description
+    category
+    difficulty
+    status
+    privacy
+    imageFileName
+    lat
+    lon
+    startTime
+    endTime
+    participantsCount
+    maxParticipants
+    targetParticipants
+    sportIds
+    chat {
+        id
+        type
+    }
+    host {
+        id
+        name
+        avatarUrl
+    }
+}
+
+query events($params: GetEventsInput!) {
+    events(params: $params) {
+        items {
+            ...Event
+        }
+        totalCount
+        hasMore
+    }
+}
+
+query event($eventId: String!) {
+    event(eventId: $eventId) {
+        ...Event
+        isHost
+        isParticipant
+    }
+}
+
+fragment NearbyEvent on NearbyEventType {
+    distanceKm
+    event {
+        ...Event
+    }
+}
+
+query nearbyEvents($limit: Int! = 10) {
+    nearbyEvents(limit: $limit) {
+        ...NearbyEvent
+    }
+}

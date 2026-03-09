@@ -1,0 +1,11 @@
+mutation login($data: LoginInput!){
+      login(data: $data) {
+        ...AuthResult
+      }
+}
+
+mutation refreshTokens($data: RefreshInput!){
+  refreshTokens(data: $data) {
+    ...AuthTokens
+  }
+}

@@ -1,0 +1,9 @@
+query myEvents($params: GetMyEventsInput!) {
+    myEvents(params: $params) {
+        items {
+            ...Event
+        }
+        totalCount
+        hasMore
+    }
+}
