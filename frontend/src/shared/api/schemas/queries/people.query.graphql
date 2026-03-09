@@ -1,0 +1,50 @@
+query similarProfiles($filters: ProfileFilterInput!, $limit: Int! = 20, $offset: Int! = 0) {
+    similarProfiles(filters: $filters, limit: $limit, offset: $offset) {
+        userId
+        name
+        age
+        avatarUrl
+        bio
+        distance
+        gender
+        locationName
+        goals {
+            id
+            name
+            iconUrl
+        }
+        sports {
+            id
+            name
+            iconUrl
+        }
+        languages
+        height
+        weight
+    }
+}
+
+query myRecentMatches {
+    myRecentMatches {
+        chatId
+        matcherProfile {
+            userId
+            name
+            age
+            avatarUrl
+            bio
+            distance
+            locationName
+            goals {
+                id
+                name
+                iconUrl
+            }
+            sports {
+                id
+                name
+                iconUrl
+            }
+        }
+    }
+}

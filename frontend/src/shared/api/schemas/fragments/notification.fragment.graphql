@@ -1,0 +1,9 @@
+fragment NotificationType on NotificationType {
+  id
+  kind
+  text
+  payload
+  isRead
+  readAt
+  createdAt
+}

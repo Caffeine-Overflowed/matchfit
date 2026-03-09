@@ -1,0 +1,26 @@
+mutation register($data: RegisterInput!) {
+  register(data: $data) {
+    ...AuthResult
+  }
+}
+
+mutation googleAuthUrl{
+  googleAuthUrl{
+    url
+    state
+  }
+
+}
+
+mutation authGoogle($data: GoogleAuthInput!) {
+  authGoogle(data: $data) {
+    ...AuthResult
+  }
+}
+
+
+mutation login($data: LoginInput!){
+      login(data: $data) {
+        ...AuthResult
+      }
+}

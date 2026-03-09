@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "../styles/theme.css";
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
+
+:root {
+    --radius: 0.625rem;
+}
+
+@layer base {
+    * {
+        @apply border-border-primary;
+    }
+    body {
+        @apply bg-bg-primary text-text-primary;
+    }
+}
+
+/* Utility for hiding scrollbars */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}

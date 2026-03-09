@@ -1,0 +1,945 @@
+"""Результат аутентификации"""
+type AuthResult {
+  """токены"""
+  tokens: TokensType!
+
+  """Данные пользователя"""
+  user: UserType!
+}
+
+"""Detailed chat information"""
+type ChatInfoType {
+  """Event associated with this chat (if any)"""
+  event: EventType
+
+  """Chat ID"""
+  id: String!
+
+  """Chat image filename"""
+  imageFileName: String
+
+  """Whether chat is deleted"""
+  isDeleted: Boolean!
+
+  """Profile associated with this chat (if any)"""
+  profile: ProfileType
+
+  """Chat name/title"""
+  title: String
+
+  """Chat kind"""
+  type: ChatKind!
+}
+
+enum ChatKind {
+  CHANNEL
+  DIRECT
+  GROUP
+}
+
+"""Chat participant"""
+type ChatParticipantType {
+  """Whether user is host"""
+  isHost: Boolean!
+
+  """When user joined"""
+  joinedAt: DateTime!
+
+  """ID of last read message"""
+  lastReadMessageId: String
+
+  """User ID"""
+  userId: String!
+}
+
+"""Chat"""
+type ChatType {
+  """When chat was created"""
+  createdAt: DateTime!
+
+  """Whether user has unread messages"""
+  hasUnreadMessages: Boolean!
+
+  """Chat ID"""
+  id: String!
+
+  """
+  Chat image filename (chat avatar for groups/channels or user avatar for direct chats)
+  """
+  imageFileName: String
+
+  """Last message in chat (for chat list)"""
+  lastMessage: LastMessagePreview
+
+  """Other user info (for direct chats only)"""
+  otherUser: UserType
+
+  """Chat participants"""
+  participants: [ChatParticipantType!]!
+
+  """Chat title"""
+  title: String
+
+  """Chat kind"""
+  type: ChatKind!
+
+  """Number of unread messages"""
+  unreadCount: Int!
+}
+
+enum Chronotype {
+  EARLY_BIRD
+  NIGHT_OWL
+  PIGEON
+}
+
+"""Данные для создания события"""
+input CreateEventInput {
+  """Категория события"""
+  category: EventCategory! = TRIP
+
+  """Тип чата события (GROUP или CHANNEL)"""
+  chatType: ChatKind!
+
+  """Описание события"""
+  description: String = null
+
+  """Уровень сложности"""
+  difficulty: DifficultyLevel! = N_A
+
+  """Время окончания (UTC)"""
+  endTime: DateTime = null
+
+  """Файл изображения события (image)"""
+  imageFileName: Upload!
+
+  """Широта"""
+  lat: Float!
+
+  """Долгота"""
+  lon: Float!
+
+  """Максимальное количество участников"""
+  maxParticipants: Int = null
+
+  """Приватность события"""
+  privacy: EventPrivacy! = PUBLIC
+
+  """ID видов спорта"""
+  sportIds: [Int!]! = []
+
+  """Время начала (UTC)"""
+  startTime: DateTime!
+
+  """Желаемое количество участников"""
+  targetParticipants: Int = null
+
+  """Название события"""
+  title: String!
+}
+
+"""Date with time (isoformat)"""
+scalar DateTime
+
+"""Input for deleting a chat"""
+input DeleteChatInput {
+  """Chat ID"""
+  chatId: String!
+}
+
+enum DifficultyLevel {
+  EASY
+  HARD
+  MEDIUM
+  N_A
+}
+
+"""Параметры для эхо-запроса"""
+input EchoInput {
+  """Сообщение для эхо"""
+  message: String!
+}
+
+enum EventCategory {
+  LECTURE
+  SPORT
+  TRIP
+  WORKSHOP
+}
+
+"""Пагинированный список событий"""
+type EventConnection {
+  """Есть ли ещё события"""
+  hasMore: Boolean!
+
+  """Список событий"""
+  items: [EventType!]!
+
+  """Общее количество"""
+  totalCount: Int!
+}
+
+"""Краткая информация об организаторе события"""
+type EventHostType {
+  """URL аватара"""
+  avatarUrl: String
+
+  """UUID пользователя"""
+  id: String!
+
+  """Имя пользователя"""
+  name: String
+}
+
+enum EventPrivacy {
+  FRIENDS_ONLY
+  PRIVATE
+  PUBLIC
+}
+
+enum EventStatus {
+  CANCELLED
+  COMPLETED
+  SCHEDULED
+}
+
+"""Событие"""
+type EventType {
+  """Категория события"""
+  category: EventCategory!
+
+  """Информация о чате события"""
+  chat: ChatInfoType
+
+  """Дата создания"""
+  createdAt: DateTime!
+
+  """Описание события"""
+  description: String
+
+  """Уровень сложности"""
+  difficulty: DifficultyLevel!
+
+  """Время окончания"""
+  endTime: DateTime
+
+  """Информация об организаторе"""
+  host: EventHostType
+
+  """UUID организатора"""
+  hostId: String!
+
+  """UUID события"""
+  id: String!
+
+  """URL изображения события"""
+  imageFileName: String!
+
+  """Является ли текущий пользователь организатором события"""
+  isHost: Boolean!
+
+  """Является ли текущий пользователь участником события"""
+  isParticipant: Boolean!
+
+  """Широта"""
+  lat: Float!
+
+  """Долгота"""
+  lon: Float!
+
+  """Максимальное количество участников"""
+  maxParticipants: Int
+
+  """Количество участников события"""
+  participantsCount: Int!
+
+  """Приватность события"""
+  privacy: EventPrivacy!
+
+  """ID видов спорта"""
+  sportIds: [Int!]!
+
+  """Время начала"""
+  startTime: DateTime!
+
+  """Статус события"""
+  status: EventStatus!
+
+  """Желаемое количество участников"""
+  targetParticipants: Int
+
+  """Название события"""
+  title: String!
+}
+
+"""Фильтры для списка событий"""
+input GetEventsInput {
+  """Фильтр по категориям (пусто = все)"""
+  categories: [EventCategory!]! = []
+
+  """Фильтр по сложности (пусто = все)"""
+  difficulties: [DifficultyLevel!]! = []
+
+  """События начиная с даты"""
+  fromDate: DateTime = null
+
+  """Фильтр по организатору (для 'мои события')"""
+  hostId: String = null
+
+  """Количество записей"""
+  limit: Int! = 20
+
+  """Смещение"""
+  offset: Int! = 0
+
+  """Фильтр по приватности (None = PUBLIC + FRIENDS_ONLY от друзей)"""
+  privacy: EventPrivacy = null
+
+  """Радиус поиска в километрах (обязательный)"""
+  radiusKm: Float!
+
+  """Поиск по названию (пустая строка = без фильтра)"""
+  search: String! = ""
+
+  """Фильтр по видам спорта (пусто = все)"""
+  sportIds: [Int!]! = []
+
+  """Фильтр по статусам (пусто = все для своих, SCHEDULED для чужих)"""
+  statuses: [EventStatus!]! = []
+
+  """События до даты"""
+  toDate: DateTime = null
+}
+
+"""Input for fetching messages with pagination"""
+input GetMessagesInput {
+  """Chat ID"""
+  chatId: String!
+
+  """Cursor: ID of last message"""
+  cursorId: String = null
+
+  """Cursor: sent_at timestamp of last message"""
+  cursorSentAt: DateTime = null
+
+  """Number of messages to fetch (max 100)"""
+  limit: Int = 50
+}
+
+"""Фильтры для списка моих событий"""
+input GetMyEventsInput {
+  """Количество записей"""
+  limit: Int! = 20
+
+  """Смещение"""
+  offset: Int! = 0
+
+  """Фильтр по статусам (пусто = все)"""
+  statuses: [EventStatus!]! = []
+}
+
+"""Параметры получения уведомлений"""
+input GetNotificationsInput {
+  """Количество уведомлений"""
+  limit: Int! = 20
+
+  """Смещение для пагинации"""
+  offset: Int! = 0
+
+  """Только непрочитанные"""
+  unreadOnly: Boolean! = false
+}
+
+"""Цель пользователя"""
+type GoalType {
+  description: String
+  iconUrl: String!
+  id: Int!
+  name: String!
+}
+
+"""Данные для Google OAuth"""
+input GoogleAuthInput {
+  """Authorization code от Google"""
+  code: String!
+
+  """State для верификации"""
+  state: String!
+}
+
+"""URL для авторизации через Google"""
+type GoogleAuthUrlResult {
+  """State для верификации (сохранить для callback)"""
+  state: String!
+
+  """URL для редиректа на Google OAuth"""
+  url: String!
+}
+
+"""Результат проверки здоровья сервиса"""
+type HealthResult {
+  """Дополнительное сообщение"""
+  message: String
+
+  """Статус сервиса"""
+  status: String!
+
+  """Время ответа"""
+  timestamp: DateTime!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+"""
+scalar JSON
+
+"""Last message preview"""
+type LastMessagePreview {
+  """Message content"""
+  content: String!
+
+  """Message ID"""
+  id: String!
+
+  """Whether message was read by current user"""
+  isRead: Boolean!
+
+  """Sender email"""
+  senderEmail: String
+
+  """Sender user ID"""
+  senderId: String!
+
+  """When message was sent"""
+  sentAt: DateTime!
+}
+
+"""Данные для входа"""
+input LoginInput {
+  """Email пользователя"""
+  email: String!
+
+  """Пароль"""
+  password: String!
+}
+
+"""Результат отметки всех уведомлений прочитанными"""
+type MarkAllNotificationsReadResult {
+  """Количество отмеченных уведомлений"""
+  count: Int!
+}
+
+"""Input for marking chat as read"""
+input MarkAsReadInput {
+  """Chat ID"""
+  chatId: String!
+}
+
+"""Mark as read result"""
+type MarkAsReadResult {
+  """Whether operation succeeded"""
+  success: Boolean!
+}
+
+"""ID уведомления для отметки прочитанным"""
+input MarkNotificationReadInput {
+  """UUID уведомления"""
+  notificationId: String!
+}
+
+"""Результат отметки уведомления прочитанным"""
+type MarkNotificationReadResult {
+  """ID уведомления"""
+  notificationId: String!
+
+  """Успешно ли отмечено"""
+  success: Boolean!
+}
+
+"""Message sender info"""
+type MessageSenderType {
+  """User email"""
+  email: String!
+
+  """User ID"""
+  id: String!
+}
+
+"""Message"""
+type MessageType {
+  """Chat ID"""
+  chatId: String!
+
+  """Message content"""
+  content: String!
+
+  """Message ID"""
+  id: String!
+
+  """Message sender"""
+  sender: MessageSenderType!
+
+  """When message was sent"""
+  sentAt: DateTime!
+}
+
+type Mutation {
+  """Авторизация через Google"""
+  authGoogle(data: GoogleAuthInput!): AuthResult!
+
+  """Отменить событие (только организатор)"""
+  cancelEvent(eventId: String!): EventType!
+
+  """Создание нового события"""
+  createEvent(eventData: CreateEventInput!): EventType!
+
+  """Создание профиля при онбординге"""
+  createProfile(data: ProfileInput!): ProfileType!
+
+  """Delete a chat (only host can delete channels/groups)"""
+  deleteChat(input: DeleteChatInput!): MarkAsReadResult!
+
+  """Эхо-запрос с сообщением"""
+  echo(data: EchoInput!): HealthResult!
+
+  """Получить URL для авторизации через Google"""
+  googleAuthUrl: GoogleAuthUrlResult!
+
+  """Присоединиться к событию"""
+  joinEvent(eventId: String!): EventType!
+
+  """Вход в систему"""
+  login(data: LoginInput!): AuthResult!
+
+  """Отметить все уведомления как прочитанные"""
+  markAllNotificationsRead: MarkAllNotificationsReadResult!
+
+  """Mark all messages in a chat as read"""
+  markAsRead(input: MarkAsReadInput!): MarkAsReadResult!
+
+  """Отметить уведомление как прочитанное"""
+  markNotificationRead(data: MarkNotificationReadInput!): MarkNotificationReadResult!
+
+  """Обновление токенов"""
+  refreshTokens(data: RefreshInput!): TokensType!
+
+  """Регистрация нового пользователя"""
+  register(data: RegisterInput!): AuthResult!
+
+  """Send a message to a chat"""
+  sendMessage(input: SendMessageInput!): MessageType!
+
+  """обработка свайпа"""
+  swipe(isLiked: Boolean!, targetId: String!): Boolean!
+
+  """Обновить событие (только организатор)"""
+  updateEvent(eventData: UpdateEventInput!): EventType!
+
+  """Обновление только локации профиля"""
+  updateLocation(data: UpdateLocationInput!): ProfileType!
+
+  """Изменение профиля"""
+  updateProfile(data: ProfileInput!): ProfileType!
+}
+
+"""Ближайшее событие с расстоянием"""
+type NearbyEventType {
+  """Расстояние до события в км"""
+  distanceKm: Float!
+
+  """Событие"""
+  event: EventType!
+}
+
+"""Пагинированный список уведомлений"""
+type NotificationConnection {
+  """Есть ли еще уведомления"""
+  hasMore: Boolean!
+
+  """Список уведомлений"""
+  items: [NotificationType!]!
+
+  """Общее количество"""
+  totalCount: Int!
+}
+
+"""Типы уведомлений"""
+enum NotificationKind {
+  EVENT_CANCELLED
+  EVENT_REMINDER
+  EVENT_STATUS_CHANGED
+  EVENT_UPDATED
+  MATCH_CONFIRMED
+  MATCH_DECLINED
+  NEW_MATCH
+  NEW_PARTICIPANT
+  PARTICIPANT_LEFT
+  SYSTEM_MESSAGE
+}
+
+"""Уведомление"""
+type NotificationType {
+  """Время создания"""
+  createdAt: DateTime!
+
+  """UUID уведомления"""
+  id: String!
+
+  """Прочитано ли уведомление"""
+  isRead: Boolean!
+
+  """Тип уведомления"""
+  kind: NotificationKind!
+
+  """Данные уведомления (event_id, user_id, etc.)"""
+  payload: JSON!
+
+  """Время прочтения (null = не прочитано)"""
+  readAt: DateTime
+
+  """Текст уведомления (локализованный)"""
+  text: String!
+
+  """Заголовок уведомления (локализованный)"""
+  title: String!
+
+  """UUID получателя"""
+  userId: String!
+}
+
+"""Paginated messages response"""
+type PaginatedMessagesType {
+  """Whether there are more messages"""
+  hasMore: Boolean!
+
+  """List of messages"""
+  messages: [MessageType!]!
+
+  """Cursor for next page: message ID"""
+  nextCursorId: String
+
+  """Cursor for next page: sent_at"""
+  nextCursorSentAt: DateTime
+}
+
+"""Фильтры для поиска похожих профилей"""
+input ProfileFilterInput {
+  """Макс. возраст"""
+  ageMax: Int = null
+
+  """Мин. возраст"""
+  ageMin: Int = null
+
+  """Хронотип"""
+  chronotype: [Chronotype!]
+
+  """Макс. расстояние в км"""
+  distanceKm: Int = null
+
+  """Пол (male/female или None для любого)"""
+  gender: String = null
+
+  """Фильтр по целям"""
+  goalIds: [Int!] = null
+
+  """Макс. рост в см"""
+  heightMax: Float = null
+
+  """Мин. рост в см"""
+  heightMin: Float = null
+
+  """Языки"""
+  languages: [String!]
+
+  """Фильтр по спортам"""
+  sportIds: [Int!] = null
+
+  """Макс. вес в кг"""
+  weightMax: Float = null
+
+  """Мин. вес в кг"""
+  weightMin: Float = null
+}
+
+"""Данные для создания/изменения профиля"""
+input ProfileInput {
+  """Файл аватара (image)"""
+  avatar: Upload!
+
+  """О себе (до 500 символов)"""
+  bio: String = null
+
+  """Месяц рождения"""
+  birthMonth: Int!
+
+  """Год рождения"""
+  birthYear: Int!
+
+  """Хронотип"""
+  chronotype: Chronotype!
+
+  """Пол"""
+  gender: String!
+
+  """айди выбранных целей"""
+  goalIds: [Int!]!
+
+  """Рост в см"""
+  height: Float = null
+
+  """Языки (ISO 639-1 коды: ru, en, de...)"""
+  languages: [String!]! = []
+
+  """Широта"""
+  lat: Float = null
+
+  """Долгота"""
+  lon: Float = null
+
+  """Имя пользователя"""
+  name: String!
+
+  """айди выбранных спортов"""
+  sportIds: [Int!]!
+
+  """Вес в кг"""
+  weight: Float = null
+}
+
+"""Профиль пользователя"""
+type ProfileType {
+  """Возраст пользователя (лет)"""
+  age: Int!
+
+  """URL аватара"""
+  avatarUrl: String!
+
+  """О себе"""
+  bio: String!
+
+  """Хронотипы"""
+  chronotype: Chronotype!
+
+  """Расстояние до пользователя (км)"""
+  distance: Int
+
+  """Пол"""
+  gender: String!
+
+  """цели пользователя"""
+  goals: [GoalType!]!
+
+  """Рост пользователя (см)"""
+  height: Float
+
+  """Языки (ISO 639-1 коды)"""
+  languages: [String!]!
+
+  """Название локации (город/страна)"""
+  locationName: String
+
+  """Имя пользователя"""
+  name: String!
+
+  """спорты пользователя"""
+  sports: [SportType!]!
+
+  """Дата последнего обновления"""
+  updatedAt: DateTime!
+
+  """ID пользователя (UUID)"""
+  userId: String!
+
+  """Вес пользователя (кг)"""
+  weight: Float
+}
+
+type Query {
+  """Get a specific chat by ID"""
+  chatInfo(chatId: String!): ChatInfoType!
+
+  """Get messages in a chat with cursor-based pagination"""
+  chatMessages(input: GetMessagesInput!): PaginatedMessagesType!
+
+  """Получить событие по ID"""
+  event(eventId: String!): EventType!
+
+  """Получить список событий с фильтрами"""
+  events(params: GetEventsInput!): EventConnection!
+
+  """Получить список всех целей"""
+  goals: [GoalType!]!
+
+  """Получить текущего авторизованного пользователя"""
+  me: UserType!
+
+  """Get all chats for current user with last message and unread status"""
+  myChats(limit: Int! = 50, offset: Int! = 0): [ChatType!]!
+
+  """Получить мои события (где я организатор или участник)"""
+  myEvents(params: GetMyEventsInput!): EventConnection!
+
+  """Получить свой профиль"""
+  myProfile: ProfileType
+
+  """Получить неактивированные метчи пользователя"""
+  myRecentMatches: [UnstartedMatchType!]!
+
+  """
+  Получить ближайшие события с сортировкой по расстоянию (до 20 штук, макс. 200 км)
+  """
+  nearbyEvents(limit: Int! = 10): [NearbyEventType!]!
+
+  """Получить уведомления текущего пользователя"""
+  notifications(params: GetNotificationsInput = null): NotificationConnection!
+
+  """Проверка доступности сервиса"""
+  ping: HealthResult!
+
+  """Получить профиль пользователя"""
+  profile(userId: String!): ProfileType!
+
+  """Подобрать похожие профили"""
+  similarProfiles(filters: ProfileFilterInput!, limit: Int! = 20, offset: Int! = 0): [ProfileType!]!
+
+  """Получить список всех видов спорта"""
+  sports: [SportType!]!
+
+  """Количество непрочитанных уведомлений"""
+  unreadNotificationsCount: Int!
+}
+
+"""Данные для обновления токенов"""
+input RefreshInput {
+  """Refresh token"""
+  refreshToken: String!
+}
+
+"""Данные для регистрации"""
+input RegisterInput {
+  """Email пользователя"""
+  email: String!
+
+  """Пароль (минимум 8 символов)"""
+  password: String!
+}
+
+"""Input for sending a message"""
+input SendMessageInput {
+  """Chat ID"""
+  chatId: String!
+
+  """Message content"""
+  content: String!
+}
+
+"""Вид спорта"""
+type SportType {
+  iconUrl: String!
+  id: Int!
+  name: String!
+}
+
+type Subscription {
+  """Subscribe to new messages in a chat"""
+  messageReceived(chatId: String!): MessageType!
+
+  """Подписка на новые уведомления в реальном времени"""
+  notificationReceived: NotificationType!
+}
+
+"""Результат токенов"""
+type TokensType {
+  """Новый JWT access token"""
+  accessToken: String!
+
+  """время в unix истекания"""
+  accessTokenExpire: Int!
+
+  """Новый refresh token"""
+  refreshToken: String!
+
+  """время в unix истекания"""
+  refreshTokenExpire: Int!
+}
+
+"""Match"""
+type UnstartedMatchType {
+  """айди чата"""
+  chatId: String!
+
+  """профиль пользователя, с которым произошел match"""
+  matcherProfile: ProfileType!
+}
+
+"""Данные для полного обновления события"""
+input UpdateEventInput {
+  """Категория события"""
+  category: EventCategory! = TRIP
+
+  """Тип чата события (GROUP или CHANNEL)"""
+  chatType: ChatKind!
+
+  """Описание события"""
+  description: String = null
+
+  """Уровень сложности"""
+  difficulty: DifficultyLevel! = N_A
+
+  """Время окончания (UTC)"""
+  endTime: DateTime = null
+
+  """ID события"""
+  eventId: String!
+
+  """Файл изображения события (image)"""
+  imageFile: Upload!
+
+  """Широта"""
+  lat: Float!
+
+  """Долгота"""
+  lon: Float!
+
+  """Максимальное количество участников"""
+  maxParticipants: Int = null
+
+  """Приватность события"""
+  privacy: EventPrivacy! = PUBLIC
+
+  """ID видов спорта"""
+  sportIds: [Int!]! = []
+
+  """Время начала (UTC)"""
+  startTime: DateTime!
+
+  """Желаемое количество участников"""
+  targetParticipants: Int = null
+
+  """Название события"""
+  title: String!
+}
+
+"""Данные для обновления локации"""
+input UpdateLocationInput {
+  """Широта"""
+  lat: Float!
+
+  """Долгота"""
+  lon: Float!
+}
+
+"""Represents a file upload."""
+scalar Upload
+
+"""Пользователь"""
+type UserType {
+  """Дата регистрации"""
+  createdAt: DateTime!
+
+  """Email пользователя"""
+  email: String!
+
+  """UUID пользователя"""
+  id: String!
+}

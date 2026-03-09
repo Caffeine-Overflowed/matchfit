@@ -1,0 +1,14 @@
+query notifications($params: GetNotificationsInput) {
+  notifications(params: $params) {
+    items {
+      ...NotificationType
+    }
+    totalCount
+    hasMore
+  }
+}
+
+query unreadNotificationsCount {
+  unreadNotificationsCount
+}
+

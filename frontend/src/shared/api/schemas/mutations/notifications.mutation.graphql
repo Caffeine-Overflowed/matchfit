@@ -1,0 +1,13 @@
+mutation markNotificationRead($data: MarkNotificationReadInput!) {
+  markNotificationRead(data: $data) {
+    notificationId
+    success
+  }
+}
+
+mutation markAllNotificationsRead {
+  markAllNotificationsRead {
+    count
+  }
+}
+

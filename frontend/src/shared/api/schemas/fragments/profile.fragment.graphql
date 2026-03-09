@@ -1,0 +1,23 @@
+fragment ProfileFragment on ProfileType {
+  userId
+  name
+  age
+  gender
+  chronotype
+  avatarUrl
+  bio
+  height
+  weight
+  languages
+  locationName
+  goals {
+    id
+    name
+    iconUrl
+  }
+  sports {
+    id
+    name
+  }
+  updatedAt
+}

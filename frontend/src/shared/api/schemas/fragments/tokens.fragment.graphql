@@ -1,0 +1,6 @@
+fragment AuthTokens on TokensType {
+    accessToken
+    accessTokenExpire
+    refreshToken
+    refreshTokenExpire
+}

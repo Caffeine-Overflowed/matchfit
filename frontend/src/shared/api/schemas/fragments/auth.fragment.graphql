@@ -1,0 +1,8 @@
+fragment AuthResult on AuthResult {
+    user {
+      ...User
+    }
+    tokens {
+        ...AuthTokens
+    }
+}
