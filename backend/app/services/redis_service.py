@@ -11,6 +11,7 @@ log = get_logger()
 
 class RedisService:
     _redis: Redis = None
+    _pubsub_redis: Redis = None
     _REFRESH_TOKEN_PREFIX = "refresh:"
     _OAUTH_STATE_PREFIX = "oauth_state:"
     _OAUTH_STATE_TTL = 600  # 10 минут
@@ -27,6 +28,14 @@ class RedisService:
             decode_responses=True,
             max_connections=20
         )
+        # Отдельный клиент без лимита пула для pub/sub: каждая подписка держит
+        # соединение на всё время жизни и иначе исчерпывает общий пул из 20,
+        # ломая refresh-токены и остальные операции с Redis.
+        cls._pubsub_redis = Redis(
+            host=Config.redis.host,
+            port=Config.redis.port,
+            decode_responses=True,
+        )
         try:
             if await cls._redis.ping():
                 log.debug("redis.connected")
@@ -37,6 +46,8 @@ class RedisService:
     @classmethod
     async def close(cls):
         """Закрытие соединения с Redis."""
+        if cls._pubsub_redis:
+            await cls._pubsub_redis.close()
         if cls._redis:
             await cls._redis.close()
             log.debug("redis.closed")
@@ -92,7 +103,7 @@ class RedisService:
     @classmethod
     async def subscribe(cls, channel: str):
         """Подписка на канал. Возвращает PubSub объект."""
-        pubsub = cls._redis.pubsub()
+        pubsub = cls._pubsub_redis.pubsub()
         await pubsub.subscribe(channel)
         return pubsub
 
