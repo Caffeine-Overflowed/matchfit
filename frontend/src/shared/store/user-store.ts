@@ -13,6 +13,14 @@ export interface UserStoreState {
 
 const localStorage = typeof window !== "undefined" ? window.localStorage : undefined;
 
+// Backend sends expiry as absolute unix timestamps in seconds; convert to ms epoch.
+// Copy instead of mutating the Apollo mutation result (which is cached/frozen).
+const normalizeTokens = (tokens: AuthTokensFragment): AuthTokensFragment => ({
+    ...tokens,
+    accessTokenExpire: tokens.accessTokenExpire * 1000,
+    refreshTokenExpire: tokens.refreshTokenExpire * 1000,
+});
+
 // Synchronous initialization from localStorage
 const persistedState = (() => {
     try {
@@ -29,15 +37,8 @@ export const useUserStore = create<UserStoreState>()(
             user: persistedState.user || undefined,
             isAuthorized: persistedState.isAuthorized || false,
             authorize: (authInfo: AuthResultFragment) => {
-                authInfo.tokens.refreshTokenExpire = new Date(
-                  new Date().getTime() + authInfo.tokens.refreshTokenExpire * 1000,
-                ).getTime();
-                authInfo.tokens.accessTokenExpire = new Date(
-                  new Date().getTime() + authInfo.tokens.accessTokenExpire * 1000,
-                ).getTime();
-
                 set(() => ({
-                    tokens: authInfo.tokens,
+                    tokens: normalizeTokens(authInfo.tokens),
                     user: authInfo.user,
                     isAuthorized: true,
                 }));
@@ -50,15 +51,8 @@ export const useUserStore = create<UserStoreState>()(
                 }));
             },
             refreshTokens: (tokensInfo: AuthTokensFragment) => {
-                tokensInfo.refreshTokenExpire = new Date(
-                  new Date().getTime() + tokensInfo.refreshTokenExpire * 1000,
-                ).getTime();
-                tokensInfo.accessTokenExpire = new Date(
-                  new Date().getTime() + tokensInfo.accessTokenExpire * 1000,
-                ).getTime();
-
                 set(() => ({
-                    tokens: tokensInfo
+                    tokens: normalizeTokens(tokensInfo)
                 }));
             },
         }),
