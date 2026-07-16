@@ -6,7 +6,6 @@ import { SwipeDocument } from "@/shared/api/graphql";
 import type { SimilarProfile } from "./use-similar-profiles";
 
 export function useSwipeProfiles(profiles: SimilarProfile[]) {
-    const [currentIndex, setCurrentIndex] = useState(0);
     const [swipedIds, setSwipedIds] = useState<Set<string>>(new Set());
 
     const [swipeMutation] = useMutation(SwipeDocument, {
@@ -22,19 +21,17 @@ export function useSwipeProfiles(profiles: SimilarProfile[]) {
         return profiles.filter(p => !swipedIds.has(p.userId));
     }, [profiles, swipedIds]);
 
-    const currentProfile = availableProfiles[currentIndex] ?? null;
-    const hasMoreProfiles = currentIndex < availableProfiles.length;
-
-    const goToNext = useCallback(() => {
-        setCurrentIndex((prev) => prev + 1);
-    }, []);
+    // Always show the first not-yet-swiped profile: swiping already removes
+    // the card via the filter above, so advancing an index too would skip
+    // every other profile and end the deck halfway through.
+    const currentProfile = availableProfiles[0] ?? null;
+    const hasMoreProfiles = availableProfiles.length > 0;
 
     const handleSwipe = useCallback(async (isLiked: boolean) => {
         if (!currentProfile) return;
 
         const targetId = currentProfile.userId;
         setSwipedIds(prev => new Set(prev).add(targetId));
-        goToNext();
 
         // Send to API in background
         try {
@@ -44,19 +41,17 @@ export function useSwipeProfiles(profiles: SimilarProfile[]) {
         } catch (err) {
             console.error("Swipe error:", err);
         }
-    }, [currentProfile, goToNext, swipeMutation]);
+    }, [currentProfile, swipeMutation]);
 
     const handleLike = useCallback(() => handleSwipe(true), [handleSwipe]);
     const handleDislike = useCallback(() => handleSwipe(false), [handleSwipe]);
 
     const reset = useCallback(() => {
-        setCurrentIndex(0);
         setSwipedIds(new Set());
     }, []);
 
     return {
         currentProfile,
-        currentIndex,
         hasMoreProfiles,
         handleLike,
         handleDislike,
