@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select, or_, func, exists
@@ -45,6 +45,7 @@ class MatchRepository:
     @staticmethod
     async def mark_as_matched(session: AsyncSession, match: Match):
         match.is_match = True
+        match.matched_at = datetime.now(timezone.utc)
 
     @staticmethod
     async def get_user_unstarted_matches(session: AsyncSession, user_id: str) -> list[Match]:
@@ -65,8 +66,9 @@ class MatchRepository:
             )
             .where(Match.chat_id.is_not(None))  # Чат должен быть создан
             .where(~has_messages)  # В чате нет сообщений
-            .where(Match.created_at >= three_days_ago)  # Не старше 3 дней
-            .order_by(Match.created_at.desc())  # Сначала свежие
+            # По времени матча, а не первого свайпа: ответный лайк мог прийти позже
+            .where(Match.matched_at >= three_days_ago)  # Не старше 3 дней
+            .order_by(Match.matched_at.desc())  # Сначала свежие
         )
         return list(result.scalars().all())
 
