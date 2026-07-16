@@ -24,7 +24,14 @@ export function NotificationInitializer() {
     // Sync notifications list
     useEffect(() => {
         if (listData?.notifications?.items) {
-            setNotifications(listData.notifications.items);
+            const firstPage = listData.notifications.items;
+            // Merge instead of replace: the poll only fetches the first page,
+            // so a plain replace would wipe pages loaded via loadMore.
+            // getState() avoids depending on the store list (would loop).
+            const existing = useNotificationStore.getState().notifications;
+            const firstPageIds = new Set(firstPage.map((n) => n.id));
+            const older = existing.filter((n) => !firstPageIds.has(n.id));
+            setNotifications([...firstPage, ...older]);
         }
     }, [listData, setNotifications]);
 
