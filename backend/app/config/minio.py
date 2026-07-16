@@ -6,3 +6,6 @@ class MinioSettings(BaseModel):
     secret_key: str = Field(...)
     bucket_name: str = Field(...)
     secure: bool = Field(...)
+    # Публичный базовый URL медиа (напр. https://media.matchfit.example). Пусто —
+    # ссылки отдаются как /cdn/<bucket>/... для локального прокси через compose/ingress.
+    public_url: str = Field(default="")
