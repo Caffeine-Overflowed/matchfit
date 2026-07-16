@@ -17,10 +17,13 @@ set_app_identity(name="bff")
 
 app = FastAPI(lifespan=lifespan)
 
+cors_origins = Config.cors.origins_list
 app.add_middleware(
     CORSMiddleware,  # type: ignore
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    # Авторизация через Bearer-заголовок, cookies не используются — при любом
+    # wildcard credentials запрещены (иначе Starlette отражает любой Origin)
+    allow_credentials="*" not in cors_origins,
     allow_methods=["POST"],
     allow_headers=["*", "Apollo-Require-Preflight", "x-apollo-operation-name"],
 )
@@ -29,6 +32,11 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(AuthContextMiddleware)
 app.add_middleware(UserInfoMiddleware)
 
-graphql_app = GraphQLRouter(schema=schema, context_getter=get_context, multipart_uploads_enabled=True)
+graphql_app = GraphQLRouter(
+    schema=schema,
+    context_getter=get_context,
+    multipart_uploads_enabled=True,
+    graphql_ide="graphiql" if Config.app.IS_DEV else None,
+)
 
 app.include_router(graphql_app, prefix="/graphql")

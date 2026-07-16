@@ -1,5 +1,8 @@
 import strawberry
+from graphql import NoSchemaIntrospectionCustomRule
+from strawberry.extensions import AddValidationRules
 
+from ..config import Config
 from .middlewares.error_extension import ErrorMaskExtension
 from .mutations.auth_mutations import AuthMutations
 from .mutations.event_mutations import EventMutations
@@ -45,9 +48,14 @@ class Subscription(ChatSubscriptions, NotificationSubscriptions):
     pass
 
 
+extensions = [ErrorMaskExtension]
+if not Config.app.IS_DEV:
+    # Вне dev/test не отдаём схему через introspection
+    extensions.append(AddValidationRules([NoSchemaIntrospectionCustomRule]))
+
 schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
     subscription=Subscription,
-    extensions=[ErrorMaskExtension],
+    extensions=extensions,
 )
