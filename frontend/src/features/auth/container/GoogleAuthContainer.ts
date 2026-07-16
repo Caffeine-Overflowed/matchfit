@@ -8,6 +8,7 @@ import {AuthGoogleDocument, GoogleAuthInput} from "@/shared/api";
 import {useRouter} from "next/navigation";
 import {CombinedGraphQLErrors} from "@apollo/client/errors";
 import {toast} from "sonner";
+import {errorTranslation} from "@/shared/constants/errorTranslation";
 
 
 export const GoogleAuthContainer: FC = () => {
@@ -26,26 +27,27 @@ export const GoogleAuthContainer: FC = () => {
             try {
                 const resp = await authGoogle({variables: {data}});
 
-                if (resp.error) {
+                if (resp.error || !resp.data) {
                     console.log("Login error:", resp.error);
 
-
+                    const code = CombinedGraphQLErrors.is(resp.error)
+                        ? resp.error.errors[0]?.message
+                        : undefined;
+                    toast.error(
+                        (code && errorTranslation[code]) ||
+                            errorTranslation["google_auth_error"],
+                    );
+                    router.replace("/auth/login");
                     return;
                 }
 
-                if (!resp.data) return;
-
-
-                const tokenAndUser = resp.data.authGoogle
-
-                authorize(tokenAndUser);
-
-
+                authorize(resp.data.authGoogle);
+                // Navigate only after a successful token exchange.
+                router.push("/home");
             } catch (err) {
                 console.error("Network error:", err);
                 toast.error(err instanceof Error ? err.message : "Network error");
-            } finally {
-                router.push("/home");
+                router.replace("/auth/login");
             }
         }, [authGoogle, authorize, router],
     );
@@ -56,6 +58,8 @@ export const GoogleAuthContainer: FC = () => {
 
         if (!code || !state) {
             console.error("code or state is missing");
+            toast.error(errorTranslation["invalid_oauth_state"]);
+            router.replace("/auth/login");
             return;
         }
 
@@ -65,7 +69,7 @@ export const GoogleAuthContainer: FC = () => {
         };
 
         fetchTokens(data).then();
-    }, [state, code, fetchTokens]);
+    }, [state, code, fetchTokens, router]);
 
     return null;
 
