@@ -14,9 +14,10 @@ from app.utils.geo import extract_coords
 from app.services.profile_service import ProfileService
 
 from app.utils.minio import MinioService, MinioFolder
+from app.graphql.context.context import GQLContext
+
 if TYPE_CHECKING:
     from app.models.event import Event
-    from app.graphql.context.context import GQLContext
     from app.graphql.types.chat import ChatInfoType
 
 
@@ -48,15 +49,19 @@ class EventType:
     created_at: datetime = strawberry.field(description="Дата создания")
     chat_id : Optional[str] = strawberry.field(description="UUID чата события")
 
-    chat: Annotated["ChatInfoType", strawberry.lazy(".chat")] | None = strawberry.field(
-        default=None,
-        description="Информация о чате события"
-    )
+    _chat_data: strawberry.Private[Optional[object]] = None
 
     @strawberry.field(description="Информация о чате события")
     async def chat(self) -> Annotated["ChatInfoType", strawberry.lazy(".chat")] | None:
+        from app.graphql.types.chat import ChatInfoType
+        if self._chat_data is not None:
+            return self._chat_data
+        if not self.chat_id:
+            return None
         async with Database.get_session() as session:
             chat = await session.get(Chat, self.chat_id)
+            if not chat:
+                return None
             return ChatInfoType(
                 id=chat.id,
                 image_file_name=MinioService.form_link(MinioFolder.CHAT_AVATARS, chat.image_file_name),
@@ -92,13 +97,15 @@ class EventType:
             difficulty=event.difficulty,
             sport_ids=[s.id for s in event.sports],
             created_at=event.created_at,
-            chat=ChatInfoType(
+            # Always prefill from the eagerly loaded event.chat so the chat
+            # resolver never falls back to a per-row DB session (N+1).
+            _chat_data=ChatInfoType(
                 id=chat.id,
                 image_file_name=MinioService.form_link(MinioFolder.CHAT_AVATARS, chat.image_file_name),
                 type=chat.type,
                 title=chat.title,
                 is_deleted=chat.is_deleted,
-            ) if map_chat and chat else None,
+            ) if chat else None,
         )
 
     @strawberry.field(description="Является ли текущий пользователь организатором события")

@@ -73,6 +73,8 @@ class Event(Base):
     sports: Mapped[List["Sport"]] = relationship(
         "Sport", secondary=event_sports, back_populates="events", lazy="selectin"
     )
+    # Intentionally lazy: participant counts/membership are served by dataloaders,
+    # eager selectin here would materialize every participant row on every list query.
     participants: Mapped[List["EventParticipant"]] = relationship(
-        "EventParticipant", back_populates="event", cascade="all, delete-orphan", lazy="selectin"
+        "EventParticipant", back_populates="event", cascade="all, delete-orphan"
     )
