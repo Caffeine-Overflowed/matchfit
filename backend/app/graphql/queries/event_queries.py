@@ -40,7 +40,7 @@ class EventQueries:
             )
 
         return EventConnection(
-            items=[EventType.from_model(e, map_chat=False) for e in events],
+            items=[EventType.from_model(e) for e in events],
             total_count=total_count,
             has_more=has_more,
         )
@@ -78,7 +78,7 @@ class EventQueries:
             )
 
         return EventConnection(
-            items=[EventType.from_model(e, map_chat=False) for e in events],
+            items=[EventType.from_model(e) for e in events],
             total_count=total_count,
             has_more=has_more,
         )
