@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Optional, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +16,7 @@ from app.utils.minio import MinioService, MinioFolder
 from app.services.redis_service import RedisService
 from app.repositories.match_repository import MatchRepository
 from app.utils.observability import get_logger
-from app.utils.validators import validate_bio, validate_languages
+from app.utils.validators import validate_bio, validate_birth_date, validate_image_upload, validate_languages
 from app.services.geo_service import GeoService
 
 log = get_logger()
@@ -89,9 +88,13 @@ class ProfileService:
             raise OnboardingAlreadyCompletedError()
         log.debug(f"profile.setup.creating", user_id=user_id)
 
+        # set birthdate to 15th of birth month
+        # validated before the avatar upload to avoid orphaned MinIO objects
+        birth_date_value = validate_birth_date(data.birth_year, data.birth_month)
+
         # avatar
         log.debug(f"profile.setup.downloading_avatar", user_id=user_id)
-        content = await data.avatar.read()
+        content = await validate_image_upload(data.avatar)
         avatar_name = MinioService.form_avatar_name(data.avatar, user_id)
         log.debug(f"profile.setup.downloaded_avatar", user_id=user_id, avatar_name=avatar_name)
 
@@ -99,16 +102,14 @@ class ProfileService:
         await MinioService.upload_object(
             folder=MinioFolder.AVATARS,
             object_name=avatar_name,
-            file=content
+            file=content,
+            content_type=data.avatar.content_type,
         )
         log.debug(f"profile.setup.uploaded_avatar", user_id=user_id, avatar_name=avatar_name)
 
         # sport and goals
         sports = await SportRepository.get_by_ids(session, data.sport_ids)
         goals = await GoalRepository.get_by_ids(session, data.goal_ids)
-
-        # set birthdate to 15th of birth month
-        birth_date_value = date(year=data.birth_year, month=data.birth_month, day=15)
 
         # location and location_name
         location = make_point(data.lat, data.lon) if data.lat is not None and data.lon is not None else None
@@ -153,8 +154,12 @@ class ProfileService:
         if not existing_profile:
             raise ProfileNotFoundError()
 
+        # set birthdate to 15th of birth month
+        # validated before the avatar delete/upload to avoid orphaned MinIO objects
+        birth_date_value = validate_birth_date(data.birth_year, data.birth_month)
+
         # avatar
-        content = await data.avatar.read()
+        content = await validate_image_upload(data.avatar)
         avatar_name = MinioService.form_avatar_name(data.avatar, user_id)
         try:
             await MinioService.delete_object(
@@ -166,15 +171,13 @@ class ProfileService:
         await MinioService.upload_object(
             folder=MinioFolder.AVATARS,
             object_name=avatar_name,
-            file=content
+            file=content,
+            content_type=data.avatar.content_type,
         )
 
         # sport and goals
         sports = await SportRepository.get_by_ids(session, data.sport_ids)
         goals = await GoalRepository.get_by_ids(session, data.goal_ids)
-
-        # set birthdate to 15th of birth month
-        birth_date_value = date(year=data.birth_year, month=data.birth_month, day=15)
 
         # location and location_name
         location = make_point(data.lat, data.lon) if data.lat is not None and data.lon is not None else None
