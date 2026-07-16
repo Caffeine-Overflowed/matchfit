@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.config.app import AppSettings
 from app.config.auth import AuthSettings
+from app.config.cors import CorsSettings
 from app.config.db import DBSettings
 from app.config.google import GoogleSettings
 from app.config.minio import MinioSettings
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     app: AppSettings
     db: DBSettings
     auth: AuthSettings
+    cors: CorsSettings = CorsSettings()
     redis: RedisSettings
     google: GoogleSettings
     minio: MinioSettings
