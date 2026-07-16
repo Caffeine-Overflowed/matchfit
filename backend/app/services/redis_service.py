@@ -25,6 +25,7 @@ class RedisService:
         cls._redis = Redis(
             host=Config.redis.host,
             port=Config.redis.port,
+            password=Config.redis.password,
             decode_responses=True,
             max_connections=20
         )
@@ -34,6 +35,7 @@ class RedisService:
         cls._pubsub_redis = Redis(
             host=Config.redis.host,
             port=Config.redis.port,
+            password=Config.redis.password,
             decode_responses=True,
         )
         try:
