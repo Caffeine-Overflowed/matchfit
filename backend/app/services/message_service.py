@@ -1,11 +1,15 @@
+import asyncio
 import json
 from datetime import datetime
-from typing import AsyncGenerator, List, Optional, Tuple
+from typing import AsyncGenerator, List, Optional, Set, Tuple
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.extensions.errors.messenger import (
     ChatNotFoundError,
+    EmptyMessageError,
+    MessageTooLongError,
     NotChatMemberError,
     UnauthorizedToSendError,
 )
@@ -21,6 +25,11 @@ log = get_logger()
 
 class MessageService:
     _CHANNEL_PREFIX = "chat:"
+    _MAX_CONTENT_LENGTH = 4000
+
+    # Strong references to fire-and-forget publish tasks so they are not
+    # garbage-collected before completing.
+    _publish_tasks: Set[asyncio.Task] = set()
 
     @classmethod
     async def send_message(
@@ -34,6 +43,13 @@ class MessageService:
         Send a message to a chat.
         Validates permissions based on chat type.
         """
+        # Validate content
+        content = content.strip()
+        if not content:
+            raise EmptyMessageError()
+        if len(content) > cls._MAX_CONTENT_LENGTH:
+            raise MessageTooLongError()
+
         # Get chat and verify it exists and is not deleted
         chat = await ChatRepository.get_by_id(session, chat_id)
         if not chat or chat.is_deleted:
@@ -58,8 +74,10 @@ class MessageService:
             content=content,
         )
 
-        # Publish to Redis for realtime delivery
-        await cls._publish_message(message)
+        # Publish to Redis for realtime delivery — deferred until the
+        # surrounding transaction commits, so subscribers never receive
+        # messages that end up rolled back.
+        cls._publish_message_after_commit(session, message)
 
         log.info(
             "message.sent",
@@ -70,9 +88,12 @@ class MessageService:
         return message
 
     @classmethod
-    async def _publish_message(cls, message: Message) -> None:
-        """Publish message to Redis pub/sub for realtime delivery."""
+    def _publish_message_after_commit(
+        cls, session: AsyncSession, message: Message
+    ) -> None:
+        """Publish message to Redis pub/sub once the transaction commits."""
         channel = f"{cls._CHANNEL_PREFIX}{message.chat_id}"
+        # Serialize now, while the ORM object and its relationships are loaded
         data = json.dumps({
             "id": message.id,
             "chat_id": message.chat_id,
@@ -81,7 +102,16 @@ class MessageService:
             "content": message.content,
             "sent_at": message.sent_at.isoformat(),
         })
-        await RedisService.publish(channel, data)
+        loop = asyncio.get_running_loop()
+
+        # after_commit fires in the loop's thread (via greenlet), so it is
+        # safe to schedule the async publish on the captured loop. If the
+        # transaction rolls back, the listener never fires.
+        @event.listens_for(session.sync_session, "after_commit", once=True)
+        def _publish(_sync_session) -> None:
+            task = loop.create_task(RedisService.publish(channel, data))
+            cls._publish_tasks.add(task)
+            task.add_done_callback(cls._publish_tasks.discard)
 
     @classmethod
     async def subscribe(
@@ -139,9 +169,11 @@ class MessageService:
             cursor_id=cursor_id,
         )
 
-        # Check if there are more messages
+        # Check if there are more messages.
+        # The list is chronological (oldest first), so the extra sentinel
+        # row is at the FRONT — drop it there to keep the newest `limit`.
         has_more = len(messages) > limit
         if has_more:
-            messages = messages[:limit]
+            messages = messages[1:]
 
         return messages, has_more
