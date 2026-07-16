@@ -65,6 +65,24 @@ export default function ChatDialogPage() {
         }
     }, [chatId, markAsRead]);
 
+    // Track the latest incoming message so messages arriving while the chat
+    // is open are also marked as read (the mount effect only runs once).
+    const latestIncomingMessageId = useMemo(() => {
+        let latest: (typeof apiMessages)[number] | null = null;
+        for (const msg of apiMessages) {
+            if (!latest || new Date(msg.sentAt).getTime() > new Date(latest.sentAt).getTime()) {
+                latest = msg;
+            }
+        }
+        return latest && latest.sender.id !== currentUserId ? latest.id : null;
+    }, [apiMessages, currentUserId]);
+
+    useEffect(() => {
+        if (chatId && latestIncomingMessageId) {
+            markAsRead(chatId);
+        }
+    }, [chatId, latestIncomingMessageId, markAsRead]);
+
     // Map API messages to UI format and group by date
     const messagesGroups: MessagesGroup[] = useMemo(() => {
         if (!apiMessages.length) return [];
@@ -105,7 +123,7 @@ export default function ChatDialogPage() {
         return {
             id: chatInfo.id,
             name: chatInfo.title ?? chatInfo.profile?.name ?? "Chat",
-            avatar: chatInfo.imageFileName ?? chatInfo.profile?.avatarUrl ?? "/avatars/default.jpg",
+            avatar: chatInfo.imageFileName || chatInfo.profile?.avatarUrl || "/avatars/default.svg",
             participantsCount: 2,
             isGroup: isGroup,
         };
