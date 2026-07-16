@@ -29,6 +29,9 @@ export function useChatMessages(chatId: string, limit = 50) {
         },
         fetchPolicy: "cache-and-network",
         pollInterval: 3000, // Poll every 3 seconds for new messages
+        // Apollo v4 defaults this to true — every poll would flip `loading`
+        // and re-trigger loading UI in the dialog.
+        notifyOnNetworkStatusChange: false,
     });
 
     const messages = data?.chatMessages.messages ?? [];
