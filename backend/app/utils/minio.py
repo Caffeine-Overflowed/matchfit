@@ -6,6 +6,9 @@ from miniopy_async import Minio
 from app import Config
 
 
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
+
+
 class MinioFolder(str, Enum):
     AVATARS = "avatars"
     CHAT_AVATARS = "chat-avatars"
@@ -22,12 +25,20 @@ class MinioService:
     )
 
     @classmethod
-    async def upload_object(cls, folder: MinioFolder, object_name: str, file: bytes):
+    async def upload_object(
+        cls,
+        folder: MinioFolder,
+        object_name: str,
+        file: bytes,
+        content_type: str | None = None,
+    ):
+        # Без content-type MinIO отдаёт объект как application/octet-stream
         return await cls._client.put_object(
             bucket_name=Config.minio.bucket_name,
             object_name=f"{folder.value}/{object_name}",
             data=io.BytesIO(file),
             length=len(file),
+            content_type=content_type or "application/octet-stream",
         )
     @staticmethod
     async def delete_object(folder: MinioFolder, object_name: str):
@@ -37,11 +48,15 @@ class MinioService:
         )
 
     @staticmethod
-    def form_link(folder: MinioFolder, object_name: str) -> str:
+    def form_link(folder: MinioFolder, object_name: str | None) -> str | None:
+        if not object_name:
+            return None
         return f"/cdn/{Config.minio.bucket_name}/{folder.value}/{object_name}"
 
     @staticmethod
     def form_avatar_name(avatar: Upload, user_id: str):
-        ext = avatar.filename.split(".")[-1] if "." in avatar.filename else "jpg"
-        avatar_name = f"{user_id}.{ext}"
-        return avatar_name
+        filename = avatar.filename or ""
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            ext = "jpg"
+        return f"{user_id}.{ext}"
