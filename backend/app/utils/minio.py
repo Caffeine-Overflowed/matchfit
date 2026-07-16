@@ -52,6 +52,8 @@ class MinioService:
     def form_link(folder: MinioFolder, object_name: str | None) -> str | None:
         if not object_name:
             return None
+        if Config.minio.public_url:
+            return f"{Config.minio.public_url.rstrip('/')}/{folder.value}/{object_name}"
         return f"/cdn/{Config.minio.bucket_name}/{folder.value}/{object_name}"
 
     @staticmethod
