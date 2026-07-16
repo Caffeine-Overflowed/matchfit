@@ -1,4 +1,5 @@
 import strawberry
+from strawberry.types import Info
 
 from app.graphql.inputs.chat_inputs import (
     CreateChannelInput,
@@ -26,7 +27,7 @@ class ChatMutations:
         description="Send a message to a chat",
         permission_classes=[IsAuthenticated],
     )
-    async def send_message(self, info, input: SendMessageInput) -> MessageType:
+    async def send_message(self, info: Info, input: SendMessageInput) -> MessageType:
         user_id = info.context.auth_context.user_id
 
         async with Database.get_session() as session:
@@ -53,7 +54,7 @@ class ChatMutations:
         description="Mark all messages in a chat as read",
         permission_classes=[IsAuthenticated],
     )
-    async def mark_as_read(self, info, input: MarkAsReadInput) -> MarkAsReadResult:
+    async def mark_as_read(self, info: Info, input: MarkAsReadInput) -> MarkAsReadResult:
         user_id = info.context.auth_context.user_id
 
         async with Database.get_session() as session:
@@ -69,7 +70,7 @@ class ChatMutations:
         description="Delete a chat (only host can delete channels/groups)",
         permission_classes=[IsAuthenticated],
     )
-    async def delete_chat(self, info, input: DeleteChatInput) -> MarkAsReadResult:
+    async def delete_chat(self, info: Info, input: DeleteChatInput) -> MarkAsReadResult:
         user_id = info.context.auth_context.user_id
 
         async with Database.get_session() as session:
