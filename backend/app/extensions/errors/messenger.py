@@ -41,3 +41,15 @@ class UnauthorizedToDeleteError(BaseDomainError):
     """User is not authorized to delete this chat (not the host)."""
 
     CODE = "unauthorized_to_delete"
+
+
+class EmptyMessageError(BaseDomainError):
+    """Message content is empty or whitespace-only."""
+
+    CODE = "empty_message"
+
+
+class MessageTooLongError(BaseDomainError):
+    """Message content exceeds the maximum allowed length."""
+
+    CODE = "message_too_long"
