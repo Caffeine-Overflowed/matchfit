@@ -1,5 +1,6 @@
 import io
 from enum import Enum
+from uuid import uuid4
 from strawberry.file_uploads import Upload
 from miniopy_async import Minio
 
@@ -59,4 +60,5 @@ class MinioService:
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             ext = "jpg"
-        return f"{user_id}.{ext}"
+        # уникальное имя на загрузку — тот же URL иначе кешируется браузером со старой авой
+        return f"{user_id}-{uuid4().hex[:12]}.{ext}"
