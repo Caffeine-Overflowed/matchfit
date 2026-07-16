@@ -96,7 +96,6 @@ export const refreshTokenWithDedup = (): Promise<string | undefined> => {
     }
 
     if (tokens.refreshTokenExpire < Date.now()) {
-        console.log(`Refresh time expired, ${JSON.stringify(tokens)}`);
         toast.info("Authorization error");
         unAuthorize();
         return Promise.resolve(undefined);
@@ -112,8 +111,7 @@ export const refreshTokenWithDedup = (): Promise<string | undefined> => {
 };
 
 const getAccessTokenPromise = (): Promise<string | undefined> => {
-    const {tokens, isAuthorized, user} = useUserStore.getState();
-    console.log(`tokens ${tokens}, isAuthorized ${isAuthorized}, user ${user}`)
+    const {tokens} = useUserStore.getState();
 
     if (!tokens) {
         console.log("No tokens");
@@ -142,8 +140,15 @@ const authLink = setContext(async (_, {headers}) => {
 
 const authLink = new ApolloLink((operation, forward) => {
   return new Observable((observer) => {
+    // Teardown must be returned from the Observable constructor itself;
+    // returning it from .then() would silently discard it.
+    let subscription: { unsubscribe: () => void } | undefined;
+    let cancelled = false;
+
     getAccessTokenPromise()
       .then((accessToken) => {
+        if (cancelled) return;
+
         operation.setContext(({ headers = {} }: { headers?: Record<string, string> }) => ({
           headers: {
             ...headers,
@@ -151,17 +156,20 @@ const authLink = new ApolloLink((operation, forward) => {
           },
         }));
 
-        const subscriber = forward(operation).subscribe({
+        subscription = forward(operation).subscribe({
           next: observer.next.bind(observer),
           error: observer.error.bind(observer),
           complete: observer.complete.bind(observer),
         });
-
-        return () => subscriber.unsubscribe();
       })
       .catch((err: Error) => {
         observer.error(err);
       });
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
   });
 });
 
