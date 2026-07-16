@@ -1,6 +1,9 @@
 from datetime import datetime, UTC
 from typing import Sequence
+from uuid import uuid4
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
@@ -20,7 +23,7 @@ from app.extensions.errors.event import (
     EventStartTimeInPastError, EventEndTimeBeforeStartError, EventNotFoundError,
     UserAlreadyParticipantError, EventIsFullError, UserNotEventHostError,
     EventAlreadyCancelledError, EventAlreadyCompletedError, MaxParticipantsBelowCurrentError,
-    InvalidChatTypeError
+    InvalidChatTypeError, InvalidParticipantsLimitError
 )
 from app.extensions.enums.notification_enums import NotificationType
 from app.graphql.inputs.event_inputs import CreateEventInput, UpdateEventInput
@@ -30,11 +33,28 @@ from app.utils.geo import make_point, extract_coords
 from app.utils.observability import get_logger
 from app.repositories.profile_repository import ProfileRepository
 from app.utils.minio import MinioService, MinioFolder
+from app.utils.validators import validate_image_upload
 
 log = get_logger()
 
 
 class EventService:
+
+    @staticmethod
+    def _validate_participant_limits(
+        max_participants: int | None,
+        target_participants: int | None,
+    ) -> None:
+        """Валидация лимитов участников: 2..1000, target <= max."""
+        for value in (max_participants, target_participants):
+            if value is not None and not (2 <= value <= 1000):
+                raise InvalidParticipantsLimitError()
+        if (
+            max_participants is not None
+            and target_participants is not None
+            and target_participants > max_participants
+        ):
+            raise InvalidParticipantsLimitError()
 
     @classmethod
     async def create_event(
@@ -65,16 +85,25 @@ class EventService:
         if event_data.chat_type == ChatKind.DIRECT:
             raise InvalidChatTypeError()
 
+        # Validate participant limits before any side effects (MinIO upload etc.)
+        cls._validate_participant_limits(
+            event_data.max_participants, event_data.target_participants
+        )
+
         sports = await SportRepository.get_by_ids(session, event_data.sport_ids)
 
-        # Upload event avatar to Minio
-        content = await event_data.image_file_name.read()
-        image_file_name = MinioService.form_avatar_name(event_data.image_file_name, host_id)
+        # Upload event image to Minio. Unique name — a host_id-based name would
+        # collide with the host's profile avatar and across the host's events.
+        upload = event_data.image_file_name
+        content = await validate_image_upload(upload)
+        ext = upload.filename.rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else "jpg"
+        image_file_name = f"{uuid4().hex}.{ext}"
 
         await MinioService.upload_object(
-            folder=MinioFolder.AVATARS,
+            folder=MinioFolder.EVENT_IMAGES,
             object_name=image_file_name,
-            file=content
+            file=content,
+            content_type=upload.content_type,
         )
 
         # Generate avatar for chat
@@ -276,6 +305,14 @@ class EventService:
         if event.status == EventStatus.CANCELLED:
             raise EventAlreadyCancelledError()
 
+        # Serialize joins per event: without this, concurrent joins both pass the
+        # capacity check and overflow max_participants. Advisory xact lock is
+        # released automatically at commit/rollback.
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:event_id, 0))"),
+            {"event_id": event_id},
+        )
+
         if await EventRepository.is_participant(session, event_id, user_id):
             raise UserAlreadyParticipantError()
 
@@ -292,7 +329,12 @@ class EventService:
             joined_at=datetime.now(UTC)
         )
 
-        event = await EventRepository.add_participant(session, participant, event)
+        try:
+            event = await EventRepository.add_participant(session, participant, event)
+        except IntegrityError as exc:
+            # Composite PK (event_id, user_id) — duplicate join (e.g. a previously
+            # left participant row) surfaces as a domain error instead of a 500.
+            raise UserAlreadyParticipantError() from exc
         await ChatParticipationRepository.add_participant(
             session=session,
             chat_id=event.chat_id,
@@ -341,6 +383,9 @@ class EventService:
                 raise EventEndTimeBeforeStartError()
 
         # Валидация max_participants
+        cls._validate_participant_limits(
+            event_data.max_participants, event_data.target_participants
+        )
         if event_data.max_participants is not None:
             current_count = await EventRepository.count_participants(session, event.id)
             if event_data.max_participants < current_count:
