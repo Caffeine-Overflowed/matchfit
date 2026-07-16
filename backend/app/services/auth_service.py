@@ -1,3 +1,4 @@
+import asyncio
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +41,8 @@ class AuthService:
         if await UserRepository.exists_by_email(session, email):
             raise EmailAlreadyExistsError()
 
-        password_hash = hash_password(password)
+        # bcrypt — CPU-bound (~100-300ms), уводим в поток, чтобы не блокировать event loop
+        password_hash = await asyncio.to_thread(hash_password, password)
         user = await UserRepository.create(session, email, password_hash)
 
         session_id = str(uuid4())
@@ -68,7 +70,10 @@ class AuthService:
         if not user:
             raise InvalidCredentialsError()
 
-        if not user.password_hash or not verify_password(password, user.password_hash):
+        # bcrypt — CPU-bound (~100-300ms), уводим в поток, чтобы не блокировать event loop
+        if not user.password_hash or not await asyncio.to_thread(
+            verify_password, password, user.password_hash
+        ):
             raise InvalidCredentialsError()
 
         session_id = str(uuid4())

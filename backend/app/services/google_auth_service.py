@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -76,9 +77,11 @@ class GoogleAuthService:
             else:
                 # Generate random password for Google users (they use OAuth to login)
                 random_password = secrets.token_urlsafe(32)
+                # bcrypt — CPU-bound, уводим в поток, чтобы не блокировать event loop
+                password_hash = await asyncio.to_thread(hash_password, random_password)
                 user = await UserRepository.create(
                     session, email=email, google_id=google_id,
-                    password_hash=hash_password(random_password)
+                    password_hash=password_hash
                 )
                 log.info("google.registered", user_id=user.id, google_id=google_id)
         else:
