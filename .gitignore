@@ -19,6 +19,14 @@ build/
 # Data
 db_data/
 redis_data/
+minio_data/
+
+# Test / tooling artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+backend/screenshots/
+.playwright-mcp/
 
 # IDE
 .idea/
