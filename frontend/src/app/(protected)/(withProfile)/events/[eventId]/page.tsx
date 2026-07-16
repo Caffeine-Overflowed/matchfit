@@ -11,7 +11,7 @@ import {useEvent} from "@/features/events";
 import {useSports} from "@/features/onboarding/hooks/use-sports";
 import {useGoogleMaps} from "@/shared/providers/google-maps-provider";
 import {Button} from "@/shared/components/ui/button";
-import {DifficultyLevel, EventCategory, JoinEventDocument,} from "@/shared/api/graphql";
+import {DifficultyLevel, EventCategory, EventDocument, JoinEventDocument,} from "@/shared/api/graphql";
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
     [EventCategory.Sport]: "Sport",
@@ -49,7 +49,11 @@ export default function EventDetailPage() {
     const {event, isLoading, error} = useEvent(eventId);
     const {sports} = useSports();
     const {isLoaded: mapsLoaded} = useGoogleMaps();
-    const [joinEvent, {loading: joinLoading}] = useMutation(JoinEventDocument);
+    const [joinEvent, {loading: joinLoading}] = useMutation(JoinEventDocument, {
+        // The mutation's Event fragment doesn't select isParticipant/isHost,
+        // so refetch the event query to update them in the cache after joining.
+        refetchQueries: [{query: EventDocument, variables: {eventId}}],
+    });
 
     const eventSports = useMemo(() => {
         if (!event?.sportIds || !sports.length) return [];
@@ -85,8 +89,11 @@ export default function EventDetailPage() {
         }
 
         try {
-            await joinEvent({variables: {eventId}});
-            router.push(`/chat/${event?.chat?.id}`);
+            const res = await joinEvent({variables: {eventId}});
+            const chatId = res.data?.joinEvent.chat?.id ?? event?.chat?.id;
+            if (chatId) {
+                router.push(`/chat/${chatId}`);
+            }
         } catch (err) {
             console.error("Failed to join event:", err);
         }
