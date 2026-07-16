@@ -1,5 +1,7 @@
 from typing import List
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.extensions.enums.notification_enums import NotificationType
@@ -27,10 +29,29 @@ class MatchService:
         if not target_profile:
             raise ProfileNotFoundError()
 
+        if is_liked:
+            await MatchService._handle_like(session, user_id, target_id)
+
+        # Redis помечаем в самом конце: если транзакция откатится раньше,
+        # не останется фантомной метки, скрывающей профиль без записи Match
         await RedisService.mark_user_as_swiped(user_id, target_id)
 
-        if not is_liked:
-            return None
+    @staticmethod
+    async def _handle_like(
+            session: AsyncSession,
+            user_id: str,
+            target_id: str,
+    ) -> None:
+        # Сериализуем свайпы по паре: без блокировки два встречных лайка
+        # могли одновременно пройти проверки и создать две односторонние записи
+        first, second = sorted((user_id, target_id))
+        await session.execute(
+            text(
+                "SELECT pg_advisory_xact_lock("
+                "hashtextextended(cast(:a as text) || ':' || cast(:b as text), 0))"
+            ),
+            {"a": first, "b": second},
+        )
 
         # Check if I already swiped this user
         already_swiped = await MatchRepository.get_existing_swipe(
@@ -42,7 +63,7 @@ class MatchService:
             return None
 
         existing_match = await MatchRepository.get_existing_swipe(
-            session=session, 
+            session=session,
             user_id=target_id,  # The other user who might have swiped me
             target_id=user_id   # Me
         )
@@ -59,23 +80,31 @@ class MatchService:
             profiles = await ProfileRepository.get_by_user_ids(session=session,
                                                                user_ids=[user_id, target_id])
 
-            #send to target and user
-            await NotificationService.create_notification(session=session,
-                                                          user_id=user_id,
-                                                          notification_type=NotificationType.NEW_MATCH,
-                                                          payload={"name": profiles[target_id].name})
+            #send to target and user (пропускаем, если профиль не найден)
+            if target_id in profiles:
+                await NotificationService.create_notification(session=session,
+                                                              user_id=user_id,
+                                                              notification_type=NotificationType.NEW_MATCH,
+                                                              payload={"name": profiles[target_id].name})
 
-            await NotificationService.create_notification(session=session,
-                                                          user_id=target_id,
-                                                          notification_type=NotificationType.NEW_MATCH,
-                                                          payload={"name": profiles[user_id].name})
+            if user_id in profiles:
+                await NotificationService.create_notification(session=session,
+                                                              user_id=target_id,
+                                                              notification_type=NotificationType.NEW_MATCH,
+                                                              payload={"name": profiles[user_id].name})
         else:
             match = Match(
                 user_id=user_id,
                 target_id=target_id,
                 is_match=False,
             )
-            await MatchRepository.create(session, match)
+            try:
+                # SAVEPOINT: дубликат от параллельного свайпа не должен
+                # ронять всю транзакцию — считаем его уже сделанным свайпом
+                async with session.begin_nested():
+                    await MatchRepository.create(session, match)
+            except IntegrityError:
+                pass
 
     @staticmethod
     async def get_user_unstarted_matches(
@@ -89,11 +118,20 @@ class MatchService:
 
         if not matches:
             return []
+
+        # Определяем ID "других" пользователей и грузим профили одним запросом
+        other_user_ids = [
+            match.target_id if match.user_id == user_id else match.user_id
+            for match in matches
+        ]
+        profiles = await ProfileRepository.get_by_user_ids(
+            session=session,
+            user_ids=other_user_ids
+        )
+
         result = []
-        for match in matches:
-            # Определяем ID "другого" пользователя
-            other_user_id = match.target_id if match.user_id == user_id else match.user_id
-            profile = await ProfileRepository.get_by_user_id(session, other_user_id)
+        for match, other_user_id in zip(matches, other_user_ids):
+            profile = profiles.get(other_user_id)
             if profile:
                 result.append(UnstartedMatchType(
                     matcher_profile=ProfileType.from_model(profile),
