@@ -35,3 +35,27 @@ class TooManyLanguagesError(BaseDomainError):
     """Превышено максимальное количество языков."""
 
     CODE = "too_many_languages"
+
+
+class InvalidImageTypeError(BaseDomainError):
+    """Недопустимый тип/расширение загружаемого изображения."""
+
+    CODE = "invalid_image_type"
+
+
+class ImageTooLargeError(BaseDomainError):
+    """Загружаемое изображение превышает максимальный размер."""
+
+    CODE = "image_too_large"
+
+
+class InvalidBirthDateError(BaseDomainError):
+    """Некорректные год/месяц рождения."""
+
+    CODE = "invalid_birth_date"
+
+
+class InvalidCoordinatesError(BaseDomainError):
+    """Координаты вне допустимого диапазона."""
+
+    CODE = "invalid_coordinates"
