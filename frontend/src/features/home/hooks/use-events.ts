@@ -98,6 +98,20 @@ export function useEvents({ filters, search = "", selectedDate, limit = 20, offs
                 variables: {
                     params: { ...params, offset: events.length },
                 },
+                // Without updateQuery the result is written under a different
+                // storeFieldName (new offset) and the original query never updates.
+                updateQuery: (prev, { fetchMoreResult }) => {
+                    if (!fetchMoreResult) return prev;
+                    return {
+                        events: {
+                            ...fetchMoreResult.events,
+                            items: [
+                                ...prev.events.items,
+                                ...fetchMoreResult.events.items,
+                            ],
+                        },
+                    };
+                },
             });
         }
     };
