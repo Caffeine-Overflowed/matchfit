@@ -36,6 +36,9 @@ class ProfileQueries:
         limit: int = 20,
         offset: int = 0
     ) -> list[ProfileType]:
+        # clamp: negative values break SQL LIMIT/OFFSET, huge limit dumps the table
+        limit = min(max(limit, 1), 50)
+        offset = max(offset, 0)
         async with Database.get_session() as session:
             dtos = await ProfileService.get_similar_profiles(
                 session,
