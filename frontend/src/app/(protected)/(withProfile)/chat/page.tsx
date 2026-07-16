@@ -39,7 +39,7 @@ export default function ChatPage() {
         id: chat.id,
         recipientId: chat.id,
         recipientName: chat.title ?? chat.otherUser?.email ?? "Chat",
-        recipientAvatar: chat.imageFileName ?? "/avatars/default.jpg",
+        recipientAvatar: chat.imageFileName || "/avatars/default.svg",
         lastMessage: chat.lastMessage?.content ?? "",
         time: chat.lastMessage?.sentAt ? formatTime(chat.lastMessage.sentAt) : "",
         isRead: chat.lastMessage?.isRead ?? true,
