@@ -23,6 +23,7 @@ dependencies = [
     "pycountry>=24.6.1",
     "pillow>=12.1.0",
     "avinit>=1.3.0",
+    "psycopg2-binary>=2.9.12",
 ]
 
 [dependency-groups]
