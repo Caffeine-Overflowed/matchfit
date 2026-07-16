@@ -2,7 +2,7 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock* README.md ./
+COPY pyproject.toml uv.lock ./
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 
