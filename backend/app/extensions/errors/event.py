@@ -53,3 +53,8 @@ class MaxParticipantsBelowCurrentError(BaseDomainError):
 class InvalidChatTypeError(BaseDomainError):
     """Недопустимый тип чата для события. Разрешены только GROUP и CHANNEL."""
     CODE = "invalid_chat_type"
+
+
+class InvalidParticipantsLimitError(BaseDomainError):
+    """Недопустимое количество участников (2..1000, target <= max)."""
+    CODE = "invalid_participants_limit"
