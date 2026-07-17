@@ -9,9 +9,7 @@ import authLink from "@/shared/api/apollo/links/authLink";
 import {errorLink} from "@/shared/api/apollo/links/errorLink";
 
 const isProd = process.env.NODE_ENV === "production";
-const apiUrl = isProd && typeof window !== "undefined"
-    ? `${window.location.origin}/graphql`
-    : `${isProd ? "https" : "http"}://${process.env.NEXT_PUBLIC_URL}/graphql`;
+const apiUrl = `${isProd ? "https" : "http"}://${process.env.NEXT_PUBLIC_URL}/graphql`;
 
 /*
 const authLink = new ApolloLink((operation, forward) => {
