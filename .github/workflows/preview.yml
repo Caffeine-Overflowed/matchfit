@@ -1,0 +1,30 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One preview environment per PR. Coolify's GitHub App builds the actual preview
+# app for the PR branch; this workflow records the GitHub "pr-N" environment so
+# the PR shows a native "View deployment" box linking to the live preview.
+jobs:
+  preview:
+    if: github.event.action != 'closed'
+    name: preview · pr-${{ github.event.number }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pr-${{ github.event.number }}
+      url: https://pr-${{ github.event.number }}.matchfit.coverflow.net
+    steps:
+      - name: Announce preview URL
+        run: |
+          echo "Preview for PR #${{ github.event.number }}"
+          echo "URL: https://pr-${{ github.event.number }}.matchfit.coverflow.net"
+
+  teardown:
+    if: github.event.action == 'closed'
+    name: preview · teardown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Note teardown
+        run: echo "PR #${{ github.event.number }} closed — Coolify removes the preview app."
