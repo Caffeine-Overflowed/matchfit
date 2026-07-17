@@ -38,6 +38,13 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # PR code is needed to run this PR's Alembic migrations against the branch.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
       - name: Provision Neon branch + ephemeral Coolify apps
         env:
           BRANCH: ${{ github.event.pull_request.head.ref }}
@@ -48,7 +55,8 @@ jobs:
           co(){ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" "$@"; }
           nn(){ curl -s -H "Authorization: Bearer $NKEY" -H "Content-Type: application/json" "$@"; }
 
-          # --- 1) isolated Neon branch (copied from main -> already migrated) ---
+          # --- 1) isolated Neon branch (copied from main's head; this PR's own
+          #        migrations are applied in step 2.5 below) ---
           bid=$(nn "$NEON/branches" | jq -r --arg n "pr-$PR" '.branches[]|select(.name==$n)|.id' | head -1)
           if [ -z "$bid" ] || [ "$bid" = "null" ]; then
             bid=$(nn -X POST "$NEON/branches" -d "{\"branch\":{\"name\":\"pr-$PR\"},\"endpoints\":[{\"type\":\"read_write\"}]}" | jq -r '.branch.id')
@@ -77,6 +85,15 @@ jobs:
           sed -i "s|^DB__HOST=.*|DB__HOST=$POOLED|" /tmp/env
           ENVDATA=$(jq -R -s 'split("\n")|map(select(length>0))|map(split("=")|{key:.[0],value:(.[1:]|join("=")),is_preview:false,is_literal:true})' /tmp/env)
           co -X PATCH "$CO/applications/$AU/envs/bulk" -d "{\"data\":$ENVDATA}" >/dev/null
+
+          # --- 2.5) apply THIS PR's migrations to the fresh branch ---
+          # The branch is copied from main's head, so a migration added in this PR
+          # is not present yet. The backend container (CMD "uv run server") does NOT
+          # migrate on start, so without this the preview backend crashes on schema
+          # drift. Runs against the branch's direct endpoint; idempotent (no-op at head).
+          echo "--- migrating preview branch pr-$PR to head ---"
+          ( cd backend && uv sync --frozen --group migration )
+          ( set -a; . /tmp/env; set +a; cd backend; DB__HOST="$host" uv run migrate upgrade head )
 
           # --- 3) frontend preview app ---
           WN="matchfit-web-pr-$PR"
