@@ -111,7 +111,15 @@ class MessageService:
         def _publish(_sync_session) -> None:
             task = loop.create_task(RedisService.publish(channel, data))
             cls._publish_tasks.add(task)
-            task.add_done_callback(cls._publish_tasks.discard)
+            task.add_done_callback(cls._on_publish_done)
+
+    @classmethod
+    def _on_publish_done(cls, task: "asyncio.Task") -> None:
+        cls._publish_tasks.discard(task)
+        # Fire-and-forget: surface publish failures instead of letting asyncio
+        # swallow them into a GC-time "exception never retrieved" warning.
+        if not task.cancelled() and task.exception() is not None:
+            log.error("message.publish_failed", error=str(task.exception()))
 
     @classmethod
     async def subscribe(
