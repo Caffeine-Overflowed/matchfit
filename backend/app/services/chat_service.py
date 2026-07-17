@@ -226,9 +226,9 @@ class ChatService:
         latest_message = await MessageRepository.get_latest_message(session, chat_id)
 
         if latest_message:
-            # Update last_read_at to latest message_id
+            # Mark read up to the newest message that currently exists
             await ChatParticipationRepository.update_last_read(
-                session, chat_id, user_id, latest_message.id
+                session, chat_id, user_id, latest_message.sent_at
             )
 
             log.debug(
