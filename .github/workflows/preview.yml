@@ -1,0 +1,48 @@
+name: PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: false
+
+# Per-PR preview environment. Coolify builds the preview apps (backend at
+# pr-N-api.matchfit.coverflow.net, frontend at pr-N.matchfit.coverflow.net,
+# preview-scoped env points the backend at an isolated Neon "preview" branch).
+# This workflow triggers those preview deploys and records the GitHub "pr-N"
+# environment so the PR shows a native "View deployment" box.
+jobs:
+  deploy:
+    if: github.event.action != 'closed'
+    name: preview · pr-${{ github.event.number }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pr-${{ github.event.number }}
+      url: https://pr-${{ github.event.number }}.matchfit.coverflow.net
+    env:
+      API: ${{ vars.COOLIFY_URL || secrets.COOLIFY_URL }}/api/v1
+      TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      PR: ${{ github.event.number }}
+    steps:
+      # NOTE: Coolify v4.1.2's API can only REDEPLOY an existing preview, not
+      # create one — the first preview for a PR must be created once via the
+      # Coolify UI (app -> Preview Deployments -> Load Pull Requests -> Deploy).
+      # After that, this step redeploys it on every push, and the `environment`
+      # above records the GitHub "pr-N" deployment/link either way.
+      - name: Redeploy Coolify previews (best effort)
+        continue-on-error: true
+        run: |
+          for uuid in "${{ secrets.COOLIFY_API_UUID }}" "${{ secrets.COOLIFY_WEB_UUID }}"; do
+            resp=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" "$API/deploy?uuid=$uuid&pr=$PR")
+            echo "$resp"
+          done
+
+  teardown:
+    if: github.event.action == 'closed'
+    name: preview · teardown pr-${{ github.event.number }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Note
+        run: echo "PR #${{ github.event.number }} closed — Coolify removes the preview apps; the shared Neon preview branch persists."
