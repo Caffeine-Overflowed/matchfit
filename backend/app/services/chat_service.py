@@ -2,8 +2,8 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.extensions.dtos.chat_dtos import ChatListItemDTO
 from app.models.profile import Profile
+from app.models.message import Message
 from app.extensions.errors.messenger import (
     CannotAddSelfToDirectChatError,
     ChatNotFoundError,
@@ -197,14 +197,8 @@ class ChatService:
         user_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ChatListItemDTO]:
-        """
-        Get all chats for a user with enriched data:
-        - Last message with sender
-        - Unread status
-        - Other user info (for direct chats)
-        """
-        return await ChatRepository.get_user_chats(session, user_id, limit, offset)
+    ) -> List[Tuple[Chat, Message]]:
+        return await ChatRepository.get_user_chat_list(session, user_id, limit, offset)
 
     @classmethod
     async def mark_as_read(
