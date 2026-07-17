@@ -30,9 +30,13 @@ jobs:
     if: github.event.action != 'closed'
     name: preview · pr-${{ github.event.number }}
     runs-on: ubuntu-latest
-    environment:
-      name: pr-${{ github.event.number }}
-      url: https://pr-${{ github.event.number }}.matchfit.coverflow.net
+    # No `environment:` on purpose: a per-PR GitHub Environment (pr-N) is NOT
+    # deleted on teardown (GITHUB_TOKEN can't manage environments), so it would
+    # orphan on every closed PR. The preview URL is printed in the deploy step
+    # and posted as a PR comment below instead.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Provision Neon branch + ephemeral Coolify apps
         env:
@@ -92,6 +96,15 @@ jobs:
           echo "deploy backend:"; co -X POST "$CO/deploy?uuid=$AU"; echo
           echo "deploy frontend:"; co -X POST "$CO/deploy?uuid=$WU"; echo
           echo "Preview: https://pr-$PR.matchfit.coverflow.net (api: https://pr-$PR-api.matchfit.coverflow.net)"
+
+      - name: Comment preview URLs on PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="Preview environment for this PR:
+          - Web: https://pr-$PR.matchfit.coverflow.net
+          - API: https://pr-$PR-api.matchfit.coverflow.net"
+          gh pr comment "$PR" --repo "$REPO" --edit-last --create-if-none --body "$body"
 
   teardown:
     if: github.event.action == 'closed'
