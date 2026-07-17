@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQuery } from "@apollo/client/react";
 import { EventsDocument, type GetEventsInput } from "@/shared/api/graphql";
 import type { EventFilters, DateFilterOption } from "@/features/filters";
@@ -92,28 +92,34 @@ export function useEvents({ filters, search = "", selectedDate, limit = 20, offs
     const totalCount = data?.events.totalCount ?? 0;
     const hasMore = data?.events.hasMore ?? false;
 
+    const loadingMoreRef = useRef(false);
+
     const loadMore = () => {
-        if (hasMore) {
-            fetchMore({
-                variables: {
-                    params: { ...params, offset: events.length },
-                },
-                // Without updateQuery the result is written under a different
-                // storeFieldName (new offset) and the original query never updates.
-                updateQuery: (prev, { fetchMoreResult }) => {
-                    if (!fetchMoreResult) return prev;
-                    return {
-                        events: {
-                            ...fetchMoreResult.events,
-                            items: [
-                                ...prev.events.items,
-                                ...fetchMoreResult.events.items,
-                            ],
-                        },
-                    };
-                },
-            });
-        }
+        // Guard against double-tap / scroll spam issuing duplicate fetches at
+        // the same offset while one is already in flight.
+        if (!hasMore || loadingMoreRef.current) return;
+        loadingMoreRef.current = true;
+        fetchMore({
+            variables: {
+                params: { ...params, offset: events.length },
+            },
+            // Without updateQuery the result is written under a different
+            // storeFieldName (new offset) and the original query never updates.
+            updateQuery: (prev, { fetchMoreResult }) => {
+                if (!fetchMoreResult) return prev;
+                // Dedupe by id so a re-run never appends the same page twice.
+                const seen = new Set(prev.events.items.map((e) => e.id));
+                const fresh = fetchMoreResult.events.items.filter((e) => !seen.has(e.id));
+                return {
+                    events: {
+                        ...fetchMoreResult.events,
+                        items: [...prev.events.items, ...fresh],
+                    },
+                };
+            },
+        }).finally(() => {
+            loadingMoreRef.current = false;
+        });
     };
 
     return {
