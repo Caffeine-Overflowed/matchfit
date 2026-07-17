@@ -34,11 +34,9 @@ class ChatParticipation(Base):
     is_host: Mapped[bool] = mapped_column(
         default=False, nullable=False
     )
-    last_read_at: Mapped[Optional[str]] = mapped_column(
-        String(36),
-        ForeignKey("messages.id", ondelete="SET NULL"),
+    last_read_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
-        index=True,
     )
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False

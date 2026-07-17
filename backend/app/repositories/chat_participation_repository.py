@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import and_, select
@@ -44,14 +45,13 @@ class ChatParticipationRepository:
         session: AsyncSession,
         chat_id: str,
         user_id: str,
-        message_id: str,
+        read_at: datetime,
     ) -> Optional[ChatParticipation]:
-        """Update last_read_at (message_id) for a user in a chat."""
         participation = await ChatParticipationRepository.get_participation(
             session, chat_id, user_id
         )
         if participation:
-            participation.last_read_at = message_id
+            participation.last_read_at = read_at
             await session.flush()
         return participation
 
