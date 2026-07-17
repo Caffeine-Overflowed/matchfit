@@ -138,3 +138,4 @@ matchfit/
     ├── public/                # Static assets & icons
     └── package.json
 ```
+<!-- CI/preview pipeline smoke test (safe to revert) -->
