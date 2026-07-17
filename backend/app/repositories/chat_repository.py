@@ -1,6 +1,7 @@
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, case, desc, func, select, text
+from sqlalchemy import and_, case, desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -309,6 +310,141 @@ class ChatRepository:
             unread_count=row.unread_count or 0,
             is_last_msg_read=row.is_last_msg_read,
         )
+
+    @staticmethod
+    async def get_user_chat_list(
+        session: AsyncSession, user_id: str, limit: int, offset: int
+    ) -> List[Tuple[Chat, Message]]:
+        rn = func.row_number().over(
+            partition_by=Message.chat_id,
+            order_by=(Message.sent_at.desc(), Message.id.desc()),
+        ).label("rn")
+        ranked = (
+            select(
+                Message.id.label("msg_id"),
+                Message.chat_id.label("chat_id"),
+                Message.sent_at.label("sent_at"),
+                rn,
+            )
+            .join(
+                ChatParticipation,
+                and_(
+                    ChatParticipation.chat_id == Message.chat_id,
+                    ChatParticipation.user_id == user_id,
+                ),
+            )
+            .join(Chat, Chat.id == Message.chat_id)
+            .where(Chat.is_deleted.is_(False))
+            .subquery()
+        )
+        latest = (
+            select(ranked.c.chat_id, ranked.c.msg_id)
+            .where(ranked.c.rn == 1)
+            .order_by(ranked.c.sent_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await session.execute(latest)).all()
+        if not rows:
+            return []
+        chat_ids = [r.chat_id for r in rows]
+        msg_ids = [r.msg_id for r in rows]
+        chats = {
+            c.id: c
+            for c in (
+                await session.execute(select(Chat).where(Chat.id.in_(chat_ids)))
+            ).scalars().all()
+        }
+        msgs = {
+            m.id: m
+            for m in (
+                await session.execute(
+                    select(Message)
+                    .where(Message.id.in_(msg_ids))
+                    .options(selectinload(Message.sender))
+                )
+            ).scalars().all()
+        }
+        return [(chats[r.chat_id], msgs[r.msg_id]) for r in rows]
+
+    @staticmethod
+    async def get_last_messages(
+        session: AsyncSession, chat_ids: List[str]
+    ) -> Dict[str, Message]:
+        if not chat_ids:
+            return {}
+        stmt = (
+            select(Message)
+            .where(Message.chat_id.in_(chat_ids))
+            .distinct(Message.chat_id)
+            .order_by(Message.chat_id, Message.sent_at.desc(), Message.id.desc())
+            .options(selectinload(Message.sender))
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+        return {m.chat_id: m for m in rows}
+
+    @staticmethod
+    async def get_read_states(
+        session: AsyncSession, chat_ids: List[str], user_id: str
+    ) -> Dict[str, Optional[datetime]]:
+        if not chat_ids:
+            return {}
+        stmt = select(
+            ChatParticipation.chat_id, ChatParticipation.last_read_at
+        ).where(
+            ChatParticipation.chat_id.in_(chat_ids),
+            ChatParticipation.user_id == user_id,
+        )
+        rows = (await session.execute(stmt)).all()
+        return {chat_id: last_read for chat_id, last_read in rows}
+
+    @staticmethod
+    async def get_unread_counts(
+        session: AsyncSession, chat_ids: List[str], user_id: str
+    ) -> Dict[str, int]:
+        if not chat_ids:
+            return {}
+        stmt = (
+            select(Message.chat_id, func.count(Message.id))
+            .join(
+                ChatParticipation,
+                and_(
+                    ChatParticipation.chat_id == Message.chat_id,
+                    ChatParticipation.user_id == user_id,
+                ),
+            )
+            .where(
+                Message.chat_id.in_(chat_ids),
+                or_(
+                    ChatParticipation.last_read_at.is_(None),
+                    Message.sent_at > ChatParticipation.last_read_at,
+                ),
+            )
+            .group_by(Message.chat_id)
+        )
+        rows = (await session.execute(stmt)).all()
+        counts = {chat_id: count for chat_id, count in rows}
+        return {cid: counts.get(cid, 0) for cid in chat_ids}
+
+    @staticmethod
+    async def get_other_users(
+        session: AsyncSession, chat_ids: List[str], user_id: str
+    ) -> Dict[str, Tuple[User, Optional[str]]]:
+        if not chat_ids:
+            return {}
+        stmt = (
+            select(ChatParticipation.chat_id, User, Profile.avatar_pic_name)
+            .join(User, User.id == ChatParticipation.user_id)
+            .join(Chat, Chat.id == ChatParticipation.chat_id)
+            .outerjoin(Profile, Profile.user_id == User.id)
+            .where(
+                ChatParticipation.chat_id.in_(chat_ids),
+                ChatParticipation.user_id != user_id,
+                Chat.type == ChatKind.DIRECT.value,
+            )
+        )
+        rows = (await session.execute(stmt)).all()
+        return {chat_id: (user, avatar) for chat_id, user, avatar in rows}
 
     @staticmethod
     async def is_user_member(
