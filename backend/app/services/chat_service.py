@@ -2,7 +2,6 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.profile import Profile
 from app.models.message import Message
 from app.extensions.errors.messenger import (
     CannotAddSelfToDirectChatError,
@@ -17,7 +16,6 @@ from app.repositories.chat_participation_repository import (
 )
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.message_repository import MessageRepository
-from app.repositories.profile_repository import ProfileRepository
 from app.utils.observability import get_logger
 
 log = get_logger()
@@ -158,37 +156,6 @@ class ChatService:
             raise NotChatMemberError()
 
         return chat
-
-    @classmethod
-    async def get_chat_info(
-        cls,
-        session: AsyncSession,
-        chat_id: str,
-        user_id: str,
-    ) -> Tuple[Chat, Optional[Profile], Optional[str]]:
-        """
-        Get detailed chat info including other user's profile for direct chats.
-        Returns: (chat, other_user_profile, image)
-        """
-        chat = await cls.get_chat(session, chat_id, user_id)
-
-        other_user_profile = None
-        image = chat.image_file_name
-
-        if chat.type == ChatKind.DIRECT:
-            # Находим участника, который НЕ текущий пользователь
-            other_participant = next(
-                (p for p in chat.participants if p.user_id != user_id),
-                None
-            )
-            if other_participant:
-                other_user_profile = await ProfileRepository.get_by_user_id(
-                    session, other_participant.user_id
-                )
-                if other_user_profile:
-                    image = other_user_profile.avatar_pic_name
-
-        return chat, other_user_profile, image
 
     @classmethod
     async def get_user_chats(

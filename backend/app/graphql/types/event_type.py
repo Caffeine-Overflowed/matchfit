@@ -64,10 +64,10 @@ class EventType:
                 return None
             return ChatInfoType(
                 id=chat.id,
-                image_file_name=MinioService.form_link(MinioFolder.CHAT_AVATARS, chat.image_file_name),
                 type=chat.type,
                 title=chat.title,
                 is_deleted=chat.is_deleted,
+                _group_image=chat.image_file_name,
             )
 
     @classmethod
@@ -101,10 +101,10 @@ class EventType:
             # resolver never falls back to a per-row DB session (N+1).
             _chat_data=ChatInfoType(
                 id=chat.id,
-                image_file_name=MinioService.form_link(MinioFolder.CHAT_AVATARS, chat.image_file_name),
                 type=chat.type,
                 title=chat.title,
                 is_deleted=chat.is_deleted,
+                _group_image=chat.image_file_name,
             ) if chat else None,
         )
 

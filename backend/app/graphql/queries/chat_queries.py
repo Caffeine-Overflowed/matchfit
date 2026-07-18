@@ -13,11 +13,9 @@ from app.graphql.types.chat import (
     PaginatedMessagesType,
     ChatInfoType,
 )
-from app.graphql.types.profile import ProfileType
 from app.services.chat_service import ChatService
 from app.services.message_service import MessageService
 from app.utils.database import Database
-from app.utils.minio import MinioService, MinioFolder
 
 
 
@@ -30,27 +28,15 @@ class ChatQueries:
         user_id = info.context.auth_context.user_id
 
         async with Database.get_session() as session:
-            chat, other_user_profile, image = await ChatService.get_chat_info(
-                session, chat_id, user_id
-            )
-
-            # For direct chats `image` is the other user's avatar, stored in AVATARS
-            if ChatKind(chat.type) == ChatKind.DIRECT and other_user_profile:
-                image_link = MinioService.form_link(MinioFolder.AVATARS, image)
-            else:
-                image_link = MinioService.form_link(MinioFolder.CHAT_AVATARS, image)
+            chat = await ChatService.get_chat(session, chat_id, user_id)
 
             return ChatInfoType(
                 id=chat.id,
-                type=chat.type,
+                type=ChatKind(chat.type),
                 title=chat.title,
-                image_file_name=image_link,
                 is_deleted=chat.is_deleted,
                 event=chat.event,
-                profile=(
-                    ProfileType.from_model(other_user_profile)
-                    if other_user_profile else None
-                ),
+                _group_image=chat.image_file_name,
             )
 
     @strawberry.field(
