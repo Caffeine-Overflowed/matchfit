@@ -133,11 +133,8 @@ class MarkAsReadResult:
 
 
 @strawberry.type(description="Detailed chat information")
-class   ChatInfoType:
+class ChatInfoType:
     id: str = strawberry.field(description="Chat ID")
-    image_file_name: Optional[str] = strawberry.field(
-        description="Chat image filename", default=None
-    )
     type: ChatKind = strawberry.field(description="Chat kind")
     title: Optional[str] = strawberry.field(description="Chat name/title")
     is_deleted: bool = strawberry.field(description="Whether chat is deleted")
@@ -145,7 +142,31 @@ class   ChatInfoType:
         description="Event associated with this chat (if any)",
         default=None
     )
-    profile: Optional[ProfileType] = strawberry.field(
-        description="Profile associated with this chat (if any)",
-        default=None
+
+    # Group/channel avatar object name; direct chats resolve the other user's avatar.
+    _group_image: strawberry.Private[Optional[str]] = None
+
+    @strawberry.field(
+        description="Chat image (group/channel avatar or the other user's avatar for direct chats)"
     )
+    async def image_file_name(self, info: Info) -> Optional[str]:
+        if ChatKind(self.type) == ChatKind.DIRECT:
+            viewer_id = info.context.auth_context.user_id
+            other = await info.context.other_user_loader.load(self.id, viewer_id)
+            avatar = other[1] if other else None
+            return MinioService.form_link(MinioFolder.AVATARS, avatar)
+        return MinioService.form_link(MinioFolder.CHAT_AVATARS, self._group_image)
+
+    @strawberry.field(
+        description="Profile associated with this chat (direct chats only)"
+    )
+    async def profile(self, info: Info) -> Optional[ProfileType]:
+        if ChatKind(self.type) != ChatKind.DIRECT:
+            return None
+        viewer_id = info.context.auth_context.user_id
+        other = await info.context.other_user_loader.load(self.id, viewer_id)
+        if not other:
+            return None
+        user, _ = other
+        profile = await info.context.profile_loader.load(user.id)
+        return ProfileType.from_model(profile) if profile else None
