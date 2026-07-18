@@ -110,7 +110,7 @@ export const refreshTokenWithDedup = (): Promise<string | undefined> => {
     return pendingRefreshPromise;
 };
 
-const getAccessTokenPromise = (): Promise<string | undefined> => {
+export const getAccessTokenPromise = (): Promise<string | undefined> => {
     const {tokens} = useUserStore.getState();
 
     if (!tokens) {
