@@ -1,145 +1,245 @@
-name: PR Preview
+name: preview
+
+# Per-PR preview environments for matchfit on the k3s GitOps platform.
+#
+# opened / synchronize / reopened:
+#   1. create (or reset) a Neon branch  preview/pr-<N>  off main
+#   2. run Alembic migrations on that branch
+#   3. build + push backend + frontend images tagged  pr-<N>-<sha>
+#      (frontend baked with NEXT_PUBLIC_URL = preview api host)
+#   4. commit apps/matchfit/previews/overlays/pr-<N>/ into the infra repo,
+#      carrying the branch DB__HOST. The infra ApplicationSet PR generator
+#      already watches open PRs and syncs the env from that overlay.
+# closed:
+#   5. delete the Neon branch and remove the infra overlay. The ApplicationSet
+#      drops the Application (preserveResourcesOnDeletion=false), which prunes
+#      the namespace + all resources.
+#
+# Preview hosts are SINGLE-LEVEL so the *.coverflow.net wildcard cert covers them:
+#   frontend -> https://pr-<N>-matchfit.coverflow.net
+#   backend  -> https://pr-<N>-api-matchfit.coverflow.net
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
 concurrency:
-  group: preview-${{ github.event.number }}
-  cancel-in-progress: false
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
-# Fully automated per-PR previews. Instead of Coolify's (UI-only) preview
-# feature, each PR gets its own ephemeral Coolify apps created via the API:
-#   backend  -> https://pr-<N>-api.matchfit.coverflow.net  (isolated Neon branch)
-#   frontend -> https://pr-<N>.matchfit.coverflow.net      (NEXT_PUBLIC_URL -> the pr api, cross-origin)
-# Closing the PR deletes both apps and the Neon branch.
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
 env:
-  CO: ${{ secrets.COOLIFY_URL }}/api/v1
-  TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-  NEON: https://console.neon.tech/api/v2/projects/${{ secrets.NEON_PROJECT_ID }}
-  NKEY: ${{ secrets.NEON_API_KEY }}
-  PR: ${{ github.event.number }}
-  PROJECT: f10ov3qaks6llyfpxuudcmsw
-  ENVNAME: production
-  SERVER: vw3eqfm6pq384nwwlf7wymbs
-  GH_APP: r2ogx6gr3r5nqpy8nc3q5wa0
-  REPO: Caffeine-Overflowed/matchfit
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/caffeine-overflowed/matchfit-backend
+  FRONTEND_IMAGE: ghcr.io/caffeine-overflowed/matchfit-frontend
+  PR: ${{ github.event.pull_request.number }}
+  SHA: ${{ github.event.pull_request.head.sha }}
+  NEON_BRANCH: preview/pr-${{ github.event.pull_request.number }}
+  FRONTEND_HOST: pr-${{ github.event.pull_request.number }}-matchfit.coverflow.net
+  API_HOST: pr-${{ github.event.pull_request.number }}-api-matchfit.coverflow.net
 
 jobs:
-  deploy:
+  # ---------------------------------------------------------------- create ---
+  neon-branch:
+    name: neon · create branch
     if: github.event.action != 'closed'
-    name: preview · pr-${{ github.event.number }}
     runs-on: ubuntu-latest
-    # No `environment:` on purpose: a per-PR GitHub Environment (pr-N) is NOT
-    # deleted on teardown (GITHUB_TOKEN can't manage environments), so it would
-    # orphan on every closed PR. The preview URL is printed in the deploy step
-    # and posted as a PR comment below instead.
-    permissions:
-      contents: read
-      pull-requests: write
+    outputs:
+      db_host: ${{ steps.branch.outputs.db_host }}
     steps:
-      # PR code is needed to run this PR's Alembic migrations against the branch.
+      - name: Create Neon branch
+        id: create
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          parent: main
+          branch_name: ${{ env.NEON_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Derive branch host
+        id: branch
+        env:
+          DB_URL: ${{ steps.create.outputs.db_url }}
+        run: |
+          # create-branch-action returns a full connection URL; strip to host.
+          host=$(printf '%s' "$DB_URL" | sed -E 's#^[^@]+@##; s#[:/].*$##')
+          echo "db_host=${host}" >> "$GITHUB_OUTPUT"
+          echo "Neon branch host: ${host}"
+
+  # ----------------------------------------------------------------- build ---
+  build-backend:
+    name: build · backend
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-      - uses: astral-sh/setup-uv@v5
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
         with:
-          enable-cache: true
-      - name: Provision Neon branch + ephemeral Coolify apps
-        env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
-          MAPS_KEY: ${{ secrets.MAPS_KEY }}
-        run: |
-          set -euo pipefail
-          co(){ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" "$@"; }
-          nn(){ curl -s -H "Authorization: Bearer $NKEY" -H "Content-Type: application/json" "$@"; }
+          context: backend
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}:pr-${{ env.PR }}-${{ env.SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-          # --- 1) isolated Neon branch (copied from main's head; this PR's own
-          #        migrations are applied in step 2.5 below) ---
-          bid=$(nn "$NEON/branches" | jq -r --arg n "pr-$PR" '.branches[]|select(.name==$n)|.id' | head -1)
-          if [ -z "$bid" ] || [ "$bid" = "null" ]; then
-            bid=$(nn -X POST "$NEON/branches" -d "{\"branch\":{\"name\":\"pr-$PR\"},\"endpoints\":[{\"type\":\"read_write\"}]}" | jq -r '.branch.id')
-          fi
-          host=""
-          for i in $(seq 1 12); do
-            host=$(nn "$NEON/endpoints" | jq -r --arg b "$bid" '.endpoints[]|select(.branch_id==$b)|.host' | head -1)
-            [ -n "$host" ] && [ "$host" != "null" ] && break; sleep 5
-          done
-          POOLED=$(echo "$host" | sed 's/\.c-/-pooler.c-/')
-          echo "Neon branch=$bid host=$POOLED"
-
-          find_app(){ co "$CO/applications" | jq -r --arg n "$1" '.[]|select(.name==$n)|.uuid' | head -1; }
-
-          # --- 2) backend preview app ---
-          AN="matchfit-api-pr-$PR"
-          AU=$(find_app "$AN")
-          if [ -z "$AU" ] || [ "$AU" = "null" ]; then
-            AU=$(co -X POST "$CO/applications/private-github-app" -d "$(jq -nc \
-              --arg p "$PROJECT" --arg s "$SERVER" --arg e "$ENVNAME" --arg g "$GH_APP" --arg r "$REPO" \
-              --arg br "$BRANCH" --arg name "$AN" --arg dom "https://pr-$PR-api.matchfit.coverflow.net" \
-              '{project_uuid:$p,server_uuid:$s,environment_name:$e,github_app_uuid:$g,git_repository:$r,git_branch:$br,build_pack:"dockerfile",base_directory:"/backend",dockerfile_location:"/Dockerfile",ports_exposes:"8000",name:$name,domains:$dom,instant_deploy:false}')" | jq -r '.uuid')
-          fi
-          echo "backend app=$AU"
-          echo "$BACKEND_ENV_B64" | base64 -d | grep -v '^\s*#' | grep '=' > /tmp/env
-          sed -i "s|^DB__HOST=.*|DB__HOST=$POOLED|" /tmp/env
-          ENVDATA=$(jq -R -s 'split("\n")|map(select(length>0))|map(split("=")|{key:.[0],value:(.[1:]|join("=")),is_preview:false,is_literal:true})' /tmp/env)
-          co -X PATCH "$CO/applications/$AU/envs/bulk" -d "{\"data\":$ENVDATA}" >/dev/null
-
-          # --- 2.5) apply THIS PR's migrations to the fresh branch ---
-          # The branch is copied from main's head, so a migration added in this PR
-          # is not present yet. The backend container (CMD "uv run server") does NOT
-          # migrate on start, so without this the preview backend crashes on schema
-          # drift. Runs against the branch's direct endpoint; idempotent (no-op at head).
-          echo "--- migrating preview branch pr-$PR to head ---"
-          ( cd backend && uv sync --frozen --group migration )
-          ( set -a; . /tmp/env; set +a; cd backend; DB__HOST="$host" uv run migrate upgrade head )
-
-          # --- 3) frontend preview app ---
-          WN="matchfit-web-pr-$PR"
-          WU=$(find_app "$WN")
-          if [ -z "$WU" ] || [ "$WU" = "null" ]; then
-            WU=$(co -X POST "$CO/applications/private-github-app" -d "$(jq -nc \
-              --arg p "$PROJECT" --arg s "$SERVER" --arg e "$ENVNAME" --arg g "$GH_APP" --arg r "$REPO" \
-              --arg br "$BRANCH" --arg name "$WN" --arg dom "https://pr-$PR.matchfit.coverflow.net" \
-              '{project_uuid:$p,server_uuid:$s,environment_name:$e,github_app_uuid:$g,git_repository:$r,git_branch:$br,build_pack:"nixpacks",base_directory:"/frontend",ports_exposes:"3000",name:$name,domains:$dom,instant_deploy:false}')" | jq -r '.uuid')
-          fi
-          echo "frontend app=$WU"
-          co -X PATCH "$CO/applications/$WU/envs/bulk" -d "$(jq -nc \
-            --arg u "pr-$PR-api.matchfit.coverflow.net" --arg m "$MAPS_KEY" \
-            '{data:[{key:"NEXT_PUBLIC_URL",value:$u,is_build_time:true,is_literal:true},{key:"NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",value:$m,is_build_time:true,is_literal:true}]}')" >/dev/null
-
-          # --- 4) deploy both ---
-          echo "deploy backend:"; co -X POST "$CO/deploy?uuid=$AU"; echo
-          echo "deploy frontend:"; co -X POST "$CO/deploy?uuid=$WU"; echo
-          echo "Preview: https://pr-$PR.matchfit.coverflow.net (api: https://pr-$PR-api.matchfit.coverflow.net)"
-
-      - name: Comment preview URLs on PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          body="Preview environment for this PR:
-          - Web: https://pr-$PR.matchfit.coverflow.net
-          - API: https://pr-$PR-api.matchfit.coverflow.net"
-          gh pr comment "$PR" --repo "$REPO" --edit-last --create-if-none --body "$body"
-
-  teardown:
-    if: github.event.action == 'closed'
-    name: preview · teardown pr-${{ github.event.number }}
+  build-frontend:
+    name: build · frontend
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete ephemeral apps + Neon branch
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}:pr-${{ env.PR }}-${{ env.SHA }}
+          # NEXT_PUBLIC_URL is inlined at build time -> must be the PREVIEW api host.
+          build-args: |
+            NEXT_PUBLIC_URL=https://${{ env.API_HOST }}
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.MAPS_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --------------------------------------------------------------- migrate ---
+  migrate:
+    name: migrate · neon branch
+    if: github.event.action != 'closed'
+    needs: [neon-branch, build-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Alembic migrations on the PR branch
         run: |
-          set -uo pipefail
-          for n in "matchfit-api-pr-$PR" "matchfit-web-pr-$PR"; do
-            u=$(curl -s -H "Authorization: Bearer $TOKEN" "$CO/applications" | jq -r --arg n "$n" '.[]|select(.name==$n)|.uuid' | head -1)
-            if [ -n "$u" ] && [ "$u" != "null" ]; then
-              curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$CO/applications/$u?delete_volumes=true&delete_connected_networks=true" >/dev/null
-              echo "deleted app $n"
-            fi
-          done
-          bid=$(curl -s -H "Authorization: Bearer $NKEY" "$NEON/branches" | jq -r --arg n "pr-$PR" '.branches[]|select(.name==$n)|.id' | head -1)
-          if [ -n "$bid" ] && [ "$bid" != "null" ]; then
-            curl -s -X DELETE -H "Authorization: Bearer $NKEY" "$NEON/branches/$bid" >/dev/null
-            echo "deleted neon branch $bid"
+          docker run --rm \
+            -e APP__ENV=preview \
+            -e APP__LOG_LEVEL=INFO \
+            -e DB__USERNAME='${{ secrets.PROD_DB_USER }}' \
+            -e DB__PASSWORD='${{ secrets.PROD_DB_PASSWORD }}' \
+            -e DB__HOST='${{ needs.neon-branch.outputs.db_host }}' \
+            -e DB__PORT='5432' \
+            -e DB__NAME='${{ secrets.PROD_DB_NAME }}' \
+            -e DB__POOL_MODE=transaction \
+            -e DB__ECHO=false \
+            -e PGSSLMODE=require \
+            -e AUTH__JWT_SECRET=migrations_only_placeholder_secret_1234567890 \
+            -e AUTH__ACCESS_TTL_SEC=3600 \
+            -e AUTH__REFRESH_TTL_SEC=604800 \
+            -e AUTH__ISSUER=matchfit \
+            -e AUTH__REFRESH_TOKEN_BYTES_LEN=32 \
+            -e AUTH__PASSWORD_MIN_LENGTH=8 \
+            -e REDIS__HOST=localhost \
+            -e REDIS__PORT=6379 \
+            -e GOOGLE__CLIENT_ID=unused \
+            -e GOOGLE__CLIENT_SECRET=unused \
+            -e GOOGLE__REDIRECT_URI=http://localhost/auth/oauth/google \
+            -e MINIO__ENDPOINT=localhost:9000 \
+            -e MINIO__ACCESS_KEY=unused \
+            -e MINIO__SECRET_KEY=unused \
+            -e MINIO__BUCKET_NAME=matchfit-media \
+            -e MINIO__SECURE=false \
+            -e MINIO__PUBLIC_URL='' \
+            ${{ env.BACKEND_IMAGE }}:pr-${{ env.PR }}-${{ env.SHA }} \
+            uv run migrate upgrade head
+
+  # ---------------------------------------------------- publish infra overlay ---
+  publish:
+    name: infra · write pr overlay
+    if: github.event.action != 'closed'
+    needs: [neon-branch, migrate, build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.INFRA_REPO }}
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
+          path: infra
+      - name: Write per-PR overlay (Neon branch host)
+        env:
+          DB_HOST: ${{ needs.neon-branch.outputs.db_host }}
+        run: |
+          dir="infra/apps/matchfit/previews/overlays/pr-${PR}"
+          mkdir -p "${dir}"
+          cat > "${dir}/kustomization.yaml" <<EOF
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          resources:
+            - ../../base
+          patches:
+            - target:
+                kind: ConfigMap
+                name: matchfit-backend-env
+              patch: |
+                - op: replace
+                  path: /data/DB__HOST
+                  value: ${DB_HOST}
+          EOF
+      - name: Commit and push
+        working-directory: infra
+        run: |
+          git config user.name  "matchfit-ci"
+          git config user.email "ci@matchfit.coverflow.net"
+          git add "apps/matchfit/previews/overlays/pr-${PR}/kustomization.yaml"
+          if git diff --cached --quiet; then
+            echo "No overlay changes."
+            exit 0
           fi
+          git commit -m "chore(matchfit-preview): overlay for PR #${PR} (branch host)"
+          git push origin HEAD:main
+
+  # --------------------------------------------------------------- teardown ---
+  teardown:
+    name: teardown · neon + infra
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Neon branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.INFRA_REPO }}
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
+          path: infra
+      - name: Remove per-PR overlay
+        working-directory: infra
+        run: |
+          git config user.name  "matchfit-ci"
+          git config user.email "ci@matchfit.coverflow.net"
+          rm -rf "apps/matchfit/previews/overlays/pr-${PR}"
+          git add -A "apps/matchfit/previews/overlays/pr-${PR}" || true
+          if git diff --cached --quiet; then
+            echo "No overlay to remove."
+            exit 0
+          fi
+          git commit -m "chore(matchfit-preview): tear down PR #${PR}"
+          git push origin HEAD:main
+          # The ApplicationSet PR generator also drops the Application on PR
+          # close, pruning the namespace. Removing the overlay just keeps git tidy.
