@@ -5,6 +5,9 @@ import type { NextConfig } from "next";
 const isDev = process.env.NODE_ENV !== "production";
 
 const nextConfig: NextConfig = {
+  // Emit a self-contained server bundle (.next/standalone/server.js) so the
+  // runtime Docker stage can run `node server.js` without node_modules.
+  output: "standalone",
   async rewrites() {
     if (!isDev) return [];
     return [
