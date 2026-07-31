@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-from strawberry.fastapi import GraphQLRouter
 
 from .config import Config
 from .graphql.context.context_getter import get_context
+from .graphql.router import AuthGraphQLRouter
 from .graphql.middlewares.auth_context import AuthContextMiddleware
 from .graphql.middlewares.request_id import RequestIdMiddleware
 from .graphql.middlewares.user_info import UserInfoMiddleware
@@ -32,7 +32,7 @@ app.add_middleware(RequestIdMiddleware)
 app.add_middleware(AuthContextMiddleware)
 app.add_middleware(UserInfoMiddleware)
 
-graphql_app = GraphQLRouter(
+graphql_app = AuthGraphQLRouter(
     schema=schema,
     context_getter=get_context,
     multipart_uploads_enabled=True,
