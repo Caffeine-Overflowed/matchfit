@@ -1,0 +1,12 @@
+subscription messageReceived($chatId: String!) {
+    messageReceived(chatId: $chatId) {
+        id
+        chatId
+        content
+        sentAt
+        sender {
+            id
+            email
+        }
+    }
+}

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@apollo/client/react";
 import {
     ChatMessagesDocument,
     ChatInfoDocument,
+    MessageReceivedDocument,
     type ChatMessagesQuery,
     type ChatInfoQuery,
 } from "@/shared/api/graphql";
@@ -18,21 +19,41 @@ export function useChatMessages(chatId: string, limit = 50) {
         sentAt: string | null;
     }>({ id: null, sentAt: null });
 
-    const { data, loading, error, fetchMore } = useQuery(ChatMessagesDocument, {
-        variables: {
-            input: {
-                chatId,
-                limit,
-                cursorId: cursor.id,
-                cursorSentAt: cursor.sentAt,
+    const { data, loading, error, fetchMore, subscribeToMore } = useQuery(
+        ChatMessagesDocument,
+        {
+            variables: {
+                input: {
+                    chatId,
+                    limit,
+                    cursorId: cursor.id,
+                    cursorSentAt: cursor.sentAt,
+                },
             },
-        },
-        fetchPolicy: "cache-and-network",
-        pollInterval: 3000, // Poll every 3 seconds for new messages
-        // Apollo v4 defaults this to true — every poll would flip `loading`
-        // and re-trigger loading UI in the dialog.
-        notifyOnNetworkStatusChange: false,
-    });
+            fetchPolicy: "cache-and-network",
+            pollInterval: 15000,
+            notifyOnNetworkStatusChange: false,
+        }
+    );
+
+    useEffect(() => {
+        return subscribeToMore({
+            document: MessageReceivedDocument,
+            variables: { chatId },
+            updateQuery: (prev, { subscriptionData }) => {
+                const incoming = subscriptionData.data?.messageReceived;
+                const existing = prev.chatMessages;
+                if (!incoming || !existing?.messages) return;
+                if (existing.messages.some((m) => m?.id === incoming.id)) return;
+                return {
+                    chatMessages: {
+                        ...existing,
+                        messages: [incoming, ...existing.messages],
+                    },
+                } as ChatMessagesQuery;
+            },
+        });
+    }, [chatId, subscribeToMore]);
 
     const messages = data?.chatMessages.messages ?? [];
     const hasMore = data?.chatMessages.hasMore ?? false;

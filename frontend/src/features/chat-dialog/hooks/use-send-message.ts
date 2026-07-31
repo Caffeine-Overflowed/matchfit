@@ -2,33 +2,10 @@
 
 import { useCallback } from "react";
 import { useMutation } from "@apollo/client/react";
-import {
-    SendMessageDocument,
-    MarkAsReadDocument,
-    ChatMessagesDocument,
-} from "@/shared/api/graphql";
+import { SendMessageDocument, MarkAsReadDocument } from "@/shared/api/graphql";
 
 export function useSendMessage(chatId: string) {
-    const [sendMessageMutation, { loading }] = useMutation(SendMessageDocument, {
-        refetchQueries: [
-            {
-                query: ChatMessagesDocument,
-                variables: {
-                    input: {
-                        chatId,
-                        limit: 50,
-                        cursorId: null,
-                        cursorSentAt: null,
-                    },
-                },
-            },
-        ],
-        update: (cache) => {
-            // Invalidate nearby events so it refetches on next visit
-            cache.evict({ fieldName: "nearbyEvents" });
-            cache.gc();
-        },
-    });
+    const [sendMessageMutation, { loading }] = useMutation(SendMessageDocument);
 
     const sendMessage = useCallback(
         async (content: string) => {
