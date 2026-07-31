@@ -10,6 +10,15 @@ from app.config import Config
 from app.extensions.request_state_models import AuthContext
 
 
+def extract_bearer(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    scheme, _, token = value.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+    return token.strip()
+
+
 def hash_password(password: str) -> str:
     """Хеширует пароль с помощью bcrypt."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
