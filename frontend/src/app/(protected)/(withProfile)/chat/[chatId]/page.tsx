@@ -146,7 +146,9 @@ export default function ChatDialogPage() {
 
     return (
         <div className="flex flex-1 flex-col h-full">
-            {mappedChatInfo && <ChatDialogHeader chat={mappedChatInfo} />}
+            {mappedChatInfo && (
+                <ChatDialogHeader chatId={chatId} chat={mappedChatInfo} />
+            )}
 
             <div className="flex-1 overflow-y-auto bg-bg-secondary">
                 <div className="flex flex-col gap-1 py-2">
