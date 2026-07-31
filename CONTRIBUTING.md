@@ -30,9 +30,23 @@ fix(match): guard mutual-like race with a unique constraint
 - Schema changes ship with their Alembic migration in the same PR.
 - Merge method: **rebase only** (linear history, atomic commits preserved). Squash and merge commits are disabled repo-wide.
 
+## Versioning
+
+[SemVer](https://semver.org): `MAJOR.MINOR.PATCH`. Pre-1.0 (`0.MINOR.PATCH`): new features bump MINOR, fix-only releases bump PATCH, breaking changes are allowed. `1.0.0` is the first stable public release.
+
+## Milestones
+
+A milestone maps to a target version (`v0.2` → `v0.2.0`). Every planned issue is filed into its milestone — that is where work is "attached to the future version". The tag does not exist yet; the milestone is its placeholder until release.
+
 ## Releases
 
-End of each milestone = tag + GitHub Release with notes (`v0.1.0`, `v0.2.0`, …).
+Cut when a milestone is 100% closed on `main`:
+
+1. Annotated tag (never lightweight): `git tag -a v0.2.0 -m "v0.2.0 — <theme>"`, then `git push origin v0.2.0`.
+2. `gh release create v0.2.0 --target main --generate-notes` — notes are built from PRs merged since the last tag (`feat` → Features, `fix` → Fixes).
+3. Close the milestone; open the next one.
+
+Hotfixes after a release ship as a PATCH bump (`v0.2.1`, fix-only). Tags are immutable — GitOps promotes and rolls back to them.
 
 ## Attribution
 
