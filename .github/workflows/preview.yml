@@ -164,82 +164,18 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:pr-${{ env.PR }}-${{ env.SHA }} \
             uv run migrate upgrade head
 
-  # ---------------------------------------------------- publish infra overlay ---
-  publish:
-    name: infra · write pr overlay
-    if: github.event.action != 'closed'
-    needs: [neon-branch, migrate, build-backend, build-frontend]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout infra repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.INFRA_REPO }}
-          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
-          path: infra
-      - name: Write per-PR overlay (Neon branch host)
-        env:
-          DB_HOST: ${{ needs.neon-branch.outputs.db_host }}
-        run: |
-          dir="infra/apps/matchfit/previews/overlays/pr-${PR}"
-          mkdir -p "${dir}"
-          cat > "${dir}/kustomization.yaml" <<EOF
-          apiVersion: kustomize.config.k8s.io/v1beta1
-          kind: Kustomization
-          resources:
-            - ../../base
-          patches:
-            - target:
-                kind: ConfigMap
-                name: matchfit-backend-env
-              patch: |
-                - op: replace
-                  path: /data/DB__HOST
-                  value: ${DB_HOST}
-          EOF
-      - name: Commit and push
-        working-directory: infra
-        run: |
-          git config user.name  "matchfit-ci"
-          git config user.email "ci@matchfit.coverflow.net"
-          git add "apps/matchfit/previews/overlays/pr-${PR}/kustomization.yaml"
-          if git diff --cached --quiet; then
-            echo "No overlay changes."
-            exit 0
-          fi
-          git commit -m "chore(matchfit-preview): overlay for PR #${PR} (branch host)"
-          git push origin HEAD:main
-
   # --------------------------------------------------------------- teardown ---
   teardown:
-    name: teardown · neon + infra
+    name: teardown · neon
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
+      # The ApplicationSet PR generator drops the preview Application on PR
+      # close, pruning its namespace. Only the Neon branch needs explicit
+      # teardown here — infra is never touched by this repo.
       - name: Delete Neon branch
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ secrets.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
-      - name: Checkout infra repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.INFRA_REPO }}
-          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
-          path: infra
-      - name: Remove per-PR overlay
-        working-directory: infra
-        run: |
-          git config user.name  "matchfit-ci"
-          git config user.email "ci@matchfit.coverflow.net"
-          rm -rf "apps/matchfit/previews/overlays/pr-${PR}"
-          git add -A "apps/matchfit/previews/overlays/pr-${PR}" || true
-          if git diff --cached --quiet; then
-            echo "No overlay to remove."
-            exit 0
-          fi
-          git commit -m "chore(matchfit-preview): tear down PR #${PR}"
-          git push origin HEAD:main
-          # The ApplicationSet PR generator also drops the Application on PR
-          # close, pruning the namespace. Removing the overlay just keeps git tidy.
