@@ -134,7 +134,7 @@ jobs:
       - name: Run Alembic migrations on the PR branch
         run: |
           docker run --rm \
-            -e APP__ENV=preview \
+            -e APP__ENV=stage \
             -e APP__LOG_LEVEL=INFO \
             -e DB__USERNAME='${{ secrets.PROD_DB_USER }}' \
             -e DB__PASSWORD='${{ secrets.PROD_DB_PASSWORD }}' \
