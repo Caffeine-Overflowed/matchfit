@@ -16,3 +16,9 @@ mutation markAsRead($input: MarkAsReadInput!) {
         success
     }
 }
+
+mutation deleteChat($input: DeleteChatInput!) {
+    deleteChat(input: $input) {
+        success
+    }
+}

@@ -1,19 +1,36 @@
 "use client";
 
+import {useState} from "react";
 import {useRouter} from "next/navigation";
-import {HiArrowLeft} from "react-icons/hi2";
+import {HiArrowLeft, HiOutlineTrash} from "react-icons/hi2";
+import {toast} from "sonner";
 import type {ChatInfo} from "../types";
+import {useDeleteChat} from "../hooks";
 
 function pluralizeParticipants(count: number): string {
     return count === 1 ? `${count} participant` : `${count} participants`;
 }
 
 interface ChatDialogHeaderProps {
+    chatId: string;
     chat: ChatInfo;
 }
 
-export function ChatDialogHeader({chat}: ChatDialogHeaderProps) {
+export function ChatDialogHeader({chatId, chat}: ChatDialogHeaderProps) {
     const router = useRouter();
+    const {deleteChat, loading} = useDeleteChat();
+    const [confirming, setConfirming] = useState(false);
+
+    const handleDelete = async () => {
+        const ok = await deleteChat(chatId);
+        if (ok) {
+            toast.success("Chat deleted");
+            router.replace("/chat");
+        } else {
+            toast.error("Could not delete chat");
+            setConfirming(false);
+        }
+    };
 
     return (
         <div className="flex items-center gap-3 py-2 sm:py-3 px-2 border-b border-gray-100">
@@ -43,6 +60,52 @@ export function ChatDialogHeader({chat}: ChatDialogHeaderProps) {
                     </p>
                 )}
             </div>
+
+            <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                aria-label="Delete chat"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-text-tertiary hover:bg-gray-100 hover:text-red-600 transition-colors shrink-0"
+            >
+                <HiOutlineTrash className="h-4 w-4"/>
+            </button>
+
+            {confirming && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    onClick={() => !loading && setConfirming(false)}
+                >
+                    <div
+                        className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 className="text-[16px] font-medium text-text-primary">
+                            Delete chat?
+                        </h2>
+                        <p className="mt-1 text-[13px] text-text-tertiary">
+                            This removes the conversation for you and can&apos;t be undone.
+                        </p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => setConfirming(false)}
+                                className="rounded-full px-4 py-2 text-[14px] font-medium text-text-secondary hover:bg-gray-100 transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={loading}
+                                onClick={handleDelete}
+                                className="rounded-full bg-red-600 px-4 py-2 text-[14px] font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                            >
+                                {loading ? "Deleting…" : "Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
