@@ -1,9 +1,15 @@
 "use client";
 
-import {ApolloClient, ApolloLink, HttpLink, InMemoryCache} from "@apollo/client";
+import {ApolloClient, HttpLink, InMemoryCache} from "@apollo/client";
 
 const isProd = process.env.NODE_ENV === "production";
-const apiUrl = `${isProd ? "https" : "http"}://${process.env.NEXT_PUBLIC_URL}/graphql`;
+const rawApiUrl = process.env.NEXT_PUBLIC_URL || "localhost:8000";
+const httpBaseUrl = (
+  /^https?:\/\//.test(rawApiUrl)
+    ? rawApiUrl
+    : `${isProd ? "https" : "http"}://${rawApiUrl}`
+).replace(/\/+$/, "");
+const apiUrl = `${httpBaseUrl}/graphql`;
 
 const httpLink = new HttpLink({
     uri: apiUrl,

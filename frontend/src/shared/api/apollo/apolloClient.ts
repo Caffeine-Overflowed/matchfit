@@ -1,19 +1,23 @@
 "use client";
 
 import { ApolloClient, ApolloLink, InMemoryCache, split } from "@apollo/client";
-import { CombinedGraphQLErrors } from "@apollo/client/errors";
-import { ErrorLink } from "@apollo/client/link/error";
 import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
 import { getMainDefinition } from "@apollo/client/utilities";
 import { createClient } from "graphql-ws";
 import UploadHttpLink from "apollo-upload-client/UploadHttpLink.mjs";
-import { useUserStore } from "@/shared/store/user-store";
 import authLink, { getAccessTokenPromise } from "@/shared/api/apollo/links/authLink";
 import {errorLink} from "@/shared/api/apollo/links/errorLink";
 
 const isProd = process.env.NODE_ENV === "production";
-const apiUrl = `${isProd ? "https" : "http"}://${process.env.NEXT_PUBLIC_URL}/graphql`;
-const wsUrl = `${isProd ? "wss" : "ws"}://${process.env.NEXT_PUBLIC_URL}/graphql`;
+const rawApiUrl = process.env.NEXT_PUBLIC_URL || "localhost:8000";
+const httpBaseUrl = (
+    /^https?:\/\//.test(rawApiUrl)
+        ? rawApiUrl
+        : `${isProd ? "https" : "http"}://${rawApiUrl}`
+).replace(/\/+$/, "");
+const wsBaseUrl = httpBaseUrl.replace(/^http/, "ws");
+const apiUrl = `${httpBaseUrl}/graphql`;
+const wsUrl = `${wsBaseUrl}/graphql`;
 
 /*
 const authLink = new ApolloLink((operation, forward) => {
@@ -67,4 +71,3 @@ export const client = new ApolloClient({
     link,
     cache: new InMemoryCache(),
 });
-
